@@ -1,3 +1,4 @@
+import * as v from "valibot";
 import type { AppContext, GitHubApi, RepoRef } from "../ports.ts";
 import { invalidateConfig } from "./config.ts";
 import { evaluatePullRequest } from "./evaluate.ts";
@@ -5,7 +6,6 @@ import {
   checkRunEventSchema,
   checkSuiteEventSchema,
   pullRequestEventSchema,
-  pullRequestReviewEventSchema,
   pushEventSchema,
   type RepositoryPayload,
   statusEventSchema,
@@ -31,7 +31,7 @@ function toRepo(repository: RepositoryPayload): RepoRef {
 
 /** Invariant: never react to our own check runs, or the app loops forever. */
 function isOwnApp(context: AppContext, appId: number): boolean {
-  return String(appId) === context.appId;
+  return String(appId) === context.env.appId;
 }
 
 async function evaluateSha(
@@ -54,95 +54,82 @@ export async function handleDelivery(
   payload: unknown,
 ): Promise<void> {
   switch (event) {
-    case "pull_request": {
-      const parsed = pullRequestEventSchema.safeParse(payload);
-      if (!parsed.success || !PULL_REQUEST_ACTIONS.has(parsed.data.action)) {
-        return;
-      }
-      const api = context.github.forInstallation(parsed.data.installation.id);
-      await evaluatePullRequest(
-        context,
-        api,
-        toRepo(parsed.data.repository),
-        parsed.data.pull_request.number,
-      );
-      return;
-    }
-
+    case "pull_request":
     case "pull_request_review": {
-      const parsed = pullRequestReviewEventSchema.safeParse(payload);
-      if (!parsed.success || !REVIEW_ACTIONS.has(parsed.data.action)) {
+      const parsed = v.safeParse(pullRequestEventSchema, payload);
+      const allowed = event === "pull_request" ? PULL_REQUEST_ACTIONS : REVIEW_ACTIONS;
+      if (!parsed.success || !allowed.has(parsed.output.action)) {
         return;
       }
-      const api = context.github.forInstallation(parsed.data.installation.id);
+      const api = context.github.forInstallation(parsed.output.installation.id);
       await evaluatePullRequest(
         context,
         api,
-        toRepo(parsed.data.repository),
-        parsed.data.pull_request.number,
+        toRepo(parsed.output.repository),
+        parsed.output.pull_request.number,
       );
       return;
     }
 
     case "check_suite": {
-      const parsed = checkSuiteEventSchema.safeParse(payload);
-      if (!parsed.success || parsed.data.action !== "completed") {
+      const parsed = v.safeParse(checkSuiteEventSchema, payload);
+      if (!parsed.success || parsed.output.action !== "completed") {
         return;
       }
-      if (isOwnApp(context, parsed.data.check_suite.app.id)) {
+      if (isOwnApp(context, parsed.output.check_suite.app.id)) {
         return;
       }
-      const api = context.github.forInstallation(parsed.data.installation.id);
+      const api = context.github.forInstallation(parsed.output.installation.id);
       await evaluateSha(
         context,
         api,
-        toRepo(parsed.data.repository),
-        parsed.data.check_suite.head_sha,
-        parsed.data.check_suite.pull_requests.map((pull) => pull.number),
+        toRepo(parsed.output.repository),
+        parsed.output.check_suite.head_sha,
+        parsed.output.check_suite.pull_requests.map((pull) => pull.number),
       );
       return;
     }
 
     case "check_run": {
-      const parsed = checkRunEventSchema.safeParse(payload);
-      if (!parsed.success || parsed.data.action !== "completed") {
+      const parsed = v.safeParse(checkRunEventSchema, payload);
+      if (!parsed.success || parsed.output.action !== "completed") {
         return;
       }
-      if (isOwnApp(context, parsed.data.check_run.app.id)) {
+      if (isOwnApp(context, parsed.output.check_run.app.id)) {
         return;
       }
-      const api = context.github.forInstallation(parsed.data.installation.id);
+      const api = context.github.forInstallation(parsed.output.installation.id);
       await evaluateSha(
         context,
         api,
-        toRepo(parsed.data.repository),
-        parsed.data.check_run.head_sha,
+        toRepo(parsed.output.repository),
+        parsed.output.check_run.head_sha,
         [],
       );
       return;
     }
 
     case "status": {
-      const parsed = statusEventSchema.safeParse(payload);
+      const parsed = v.safeParse(statusEventSchema, payload);
       if (!parsed.success) {
         return;
       }
-      const api = context.github.forInstallation(parsed.data.installation.id);
-      await evaluateSha(context, api, toRepo(parsed.data.repository), parsed.data.sha, []);
+      const api = context.github.forInstallation(parsed.output.installation.id);
+      await evaluateSha(context, api, toRepo(parsed.output.repository), parsed.output.sha, []);
       return;
     }
 
     case "push": {
-      const parsed = pushEventSchema.safeParse(payload);
+      const parsed = v.safeParse(pushEventSchema, payload);
       if (!parsed.success) {
         return;
       }
       // The configuration lives on the default branch, so only that branch can
       // have changed it.
-      if (parsed.data.ref !== `refs/heads/${parsed.data.repository.default_branch}`) {
+      if (parsed.output.ref !== `refs/heads/${parsed.output.repository.default_branch}`) {
         return;
       }
-      await invalidateConfig(context, toRepo(parsed.data.repository));
+      await invalidateConfig(context, toRepo(parsed.output.repository));
       return;
     }
 
@@ -150,6 +137,3 @@ export async function handleDelivery(
       context.logger.debug("event ignored");
   }
 }
-
-export { evaluatePullRequest } from "./evaluate.ts";
-export { invalidateConfig, loadConfig } from "./config.ts";

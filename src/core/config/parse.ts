@@ -1,25 +1,18 @@
+import * as v from "valibot";
 import { parse as parseYaml } from "yaml";
 import { type Config, configSchema } from "./schema.ts";
+
+/** `rules[0].base`, the way the file itself reads. */
+function formatPath(issue: v.BaseIssue<unknown>): string {
+  const path = (issue.path ?? [])
+    .map((item) => (typeof item.key === "number" ? `[${item.key}]` : `.${String(item.key)}`))
+    .join("");
+  return path.replace(/^\./, "") || "(root)";
+}
 
 export type ConfigResult =
   | { readonly ok: true; readonly config: Config }
   | { readonly ok: false; readonly errors: readonly string[] };
-
-function formatPath(path: readonly PropertyKey[]): string {
-  if (path.length === 0) {
-    return "(root)";
-  }
-  return path.reduce<string>((accumulator, segment) => {
-    if (typeof segment === "number") {
-      return `${accumulator}[${segment}]`;
-    }
-    return accumulator === "" ? String(segment) : `${accumulator}.${String(segment)}`;
-  }, "");
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 /**
  * Parse `.github/squashables.yml`. Never throws: an unparseable configuration is
@@ -35,22 +28,18 @@ export function parseConfig(source: string): ConfigResult {
     return { ok: false, errors: [`the file is not valid YAML: ${message}`] };
   }
 
-  if (!isPlainObject(document)) {
-    return { ok: false, errors: ["the configuration must be a mapping"] };
-  }
-
-  const result = configSchema.safeParse(document);
+  const result = v.safeParse(configSchema, document);
   if (!result.success) {
     return {
       ok: false,
-      errors: result.error.issues.map((issue) => `${formatPath(issue.path)}: ${issue.message}`),
+      errors: result.issues.map((issue) => `${formatPath(issue)}: ${issue.message}`),
     };
   }
 
-  return { ok: true, config: result.data };
+  return { ok: true, config: result.output };
 }
 
 /** The configuration a repository without a configuration file behaves as. */
 export function defaultConfig(): Config {
-  return configSchema.parse({ version: 1 });
+  return v.parse(configSchema, { version: 1 });
 }

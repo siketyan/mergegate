@@ -1,16 +1,9 @@
 import type { Env } from "../../core/ports.ts";
 
-export class MissingEnvError extends Error {
-  constructor(name: string) {
-    super(`missing required environment value: ${name}`);
-    this.name = "MissingEnvError";
-  }
-}
-
 function required(source: Record<string, string | undefined>, name: string): string {
   const value = source[name];
   if (value === undefined || value === "") {
-    throw new MissingEnvError(name);
+    throw new Error(`missing required environment value: ${name}`);
   }
   return value;
 }

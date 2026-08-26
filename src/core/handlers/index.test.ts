@@ -41,14 +41,14 @@ test("an action that cannot change the decision is ignored", async () => {
 test("our own check run never triggers another one", async () => {
   const { api, state } = fake();
   // testEnv.appId is 1234, which is the app in the fixture.
-  const { context } = createTestContext(api, { appId: testEnv.appId });
+  const { context } = createTestContext(api);
   await handleDelivery(context, "check_run", await fixture("check_run.completed"));
   expect(state.checkRuns).toHaveLength(0);
 });
 
 test("someone else's check run re-evaluates the pull requests on that commit", async () => {
   const { api, state } = fake();
-  const { context } = createTestContext(api, { appId: "9999" });
+  const { context } = createTestContext(api, { env: { ...testEnv, appId: "9999" } });
   await handleDelivery(context, "check_run", await fixture("check_run.completed"));
   expect(state.checkRuns).toHaveLength(1);
 });

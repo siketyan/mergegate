@@ -21,10 +21,6 @@ export interface Logger {
   with(fields: Record<string, unknown>): Logger;
 }
 
-export interface Clock {
-  now(): Date;
-}
-
 /** Work that continues after the 202 response. */
 export interface Deferrer {
   defer(work: () => Promise<void>): void;
@@ -38,6 +34,7 @@ export interface Cache {
 }
 
 export interface Env {
+  /** Also how the app recognises its own check run events. */
   readonly appId: string;
   readonly privateKey: string;
   readonly webhookSecret: string;
@@ -115,10 +112,7 @@ export interface GitHubApiFactory {
 export interface AppContext {
   readonly github: GitHubApiFactory;
   readonly logger: Logger;
-  readonly clock: Clock;
   readonly deferrer: Deferrer;
   readonly env: Env;
   readonly cache?: Cache;
-  /** The app's own id, so its own check run events can be ignored. */
-  readonly appId: string;
 }

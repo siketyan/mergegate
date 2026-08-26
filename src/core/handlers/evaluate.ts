@@ -1,6 +1,6 @@
 import { renderCheck } from "../check/render.ts";
 import type { CheckState } from "../check/render.ts";
-import { FALLBACK_CHECK_NAME, type Config, type Strategy } from "../config/index.ts";
+import { type Config, FALLBACK_CHECK_NAME, type Strategy } from "../config/schema.ts";
 import { decide } from "../policy/decide.ts";
 import { evaluateGate } from "../policy/gate.ts";
 import type { AppContext, GitHubApi, MergeOutcome, PullRequestState, RepoRef } from "../ports.ts";

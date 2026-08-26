@@ -1,13 +1,15 @@
-import { z } from "zod";
-import type { CheckConclusion, ReviewDecision } from "../../core/policy/gate.ts";
+import type { CheckConclusion } from "../../core/policy/gate.ts";
 import type { PullRequestState } from "../../core/ports.ts";
+import type { PullRequestStateQuery } from "./generated/graphql.ts";
 
 /**
  * One query for everything a decision needs. `reviewDecision` is GitHub's own
  * answer to "does this satisfy the review rules", which beats recounting
  * reviews over REST.
+ *
+ * The `/* GraphQL *\/` marker is what graphql-codegen picks this up by.
  */
-export const pullRequestQuery = `
+export const pullRequestQuery = /* GraphQL */ `
   query PullRequestState($owner: String!, $repo: String!, $number: Int!) {
     repository(owner: $owner, name: $repo) {
       nameWithOwner
@@ -43,7 +45,6 @@ export const pullRequestQuery = `
                       conclusion
                     }
                     ... on StatusContext {
-                      context
                       state
                     }
                   }
@@ -57,65 +58,19 @@ export const pullRequestQuery = `
   }
 `;
 
-const checkRunNode = z.object({
-  __typename: z.literal("CheckRun"),
-  name: z.string(),
-  status: z.string(),
-  conclusion: z.string().nullable(),
-});
+type PullRequestNode = NonNullable<PullRequestStateQuery["repository"]>["pullRequest"];
+type StatusContextNode = NonNullable<
+  NonNullable<
+    NonNullable<
+      NonNullable<NonNullable<PullRequestNode>["commits"]["nodes"]>[number]
+    >["commit"]["statusCheckRollup"]
+  >["contexts"]["nodes"]
+>[number];
 
-const statusContextNode = z.object({
-  __typename: z.literal("StatusContext"),
-  context: z.string(),
-  state: z.string(),
-});
-
-const contextNode = z.union([
-  checkRunNode,
-  statusContextNode,
-  z.object({ __typename: z.string() }),
-]);
-
-export const pullRequestResponseSchema = z.object({
-  repository: z.object({
-    nameWithOwner: z.string(),
-    pullRequest: z
-      .object({
-        number: z.number(),
-        title: z.string(),
-        state: z.enum(["OPEN", "CLOSED", "MERGED"]),
-        isDraft: z.boolean(),
-        mergeable: z.enum(["MERGEABLE", "CONFLICTING", "UNKNOWN"]),
-        mergeStateStatus: z.string().nullish(),
-        reviewDecision: z.enum(["APPROVED", "CHANGES_REQUESTED", "REVIEW_REQUIRED"]).nullable(),
-        baseRefName: z.string(),
-        headRefName: z.string(),
-        headRefOid: z.string(),
-        headRepository: z.object({ nameWithOwner: z.string() }).nullable(),
-        labels: z.object({ nodes: z.array(z.object({ name: z.string() })).nullish() }).nullish(),
-        commits: z.object({
-          nodes: z
-            .array(
-              z.object({
-                commit: z.object({
-                  statusCheckRollup: z
-                    .object({
-                      contexts: z.object({ nodes: z.array(contextNode).nullish() }),
-                    })
-                    .nullish(),
-                }),
-              }),
-            )
-            .nullish(),
-        }),
-      })
-      .nullable(),
-  }),
-});
-
-export type PullRequestResponse = z.output<typeof pullRequestResponseSchema>;
-
-function checkRunConclusion(status: string, conclusion: string | null): CheckConclusion {
+function checkRunConclusion(
+  status: string,
+  conclusion: string | null | undefined,
+): CheckConclusion {
   if (status !== "COMPLETED") {
     return "pending";
   }
@@ -151,58 +106,73 @@ function statusContextConclusion(state: string): CheckConclusion {
   }
 }
 
-function mergeableOf(value: "MERGEABLE" | "CONFLICTING" | "UNKNOWN"): boolean | null {
-  switch (value) {
-    case "MERGEABLE":
-      return true;
-    case "CONFLICTING":
-      return false;
-    case "UNKNOWN":
-      // Computed asynchronously by GitHub: undetermined, not "fine to merge".
-      return null;
+/** Every check on the head commit except the one squashables owns. */
+function otherChecks(
+  nodes: readonly (StatusContextNode | null)[],
+  ownCheckName: string,
+): CheckConclusion[] {
+  const conclusions: CheckConclusion[] = [];
+  for (const node of nodes) {
+    if (node === null) {
+      continue;
+    }
+    switch (node.__typename) {
+      case "CheckRun":
+        // Never gate on our own check run: it is failing on purpose.
+        if (node.name !== ownCheckName) {
+          conclusions.push(checkRunConclusion(node.status, node.conclusion));
+        }
+        break;
+      case "StatusContext":
+        conclusions.push(statusContextConclusion(node.state));
+        break;
+      default:
+        break;
+    }
   }
+  return conclusions;
 }
 
 export function toPullRequestState(
-  response: PullRequestResponse,
+  response: PullRequestStateQuery,
   ownCheckName: string,
 ): PullRequestState | null {
-  const { nameWithOwner, pullRequest } = response.repository;
-  if (pullRequest === null) {
+  const repository = response.repository;
+  const pullRequest = repository?.pullRequest;
+  if (
+    repository === null ||
+    repository === undefined ||
+    pullRequest === null ||
+    pullRequest === undefined
+  ) {
     return null;
   }
 
   const contexts = pullRequest.commits.nodes?.[0]?.commit.statusCheckRollup?.contexts.nodes ?? [];
 
-  const otherChecks: CheckConclusion[] = [];
-  for (const context of contexts) {
-    if (context.__typename === "CheckRun") {
-      const node = checkRunNode.parse(context);
-      // Never gate on our own check run: it is failing on purpose.
-      if (node.name !== ownCheckName) {
-        otherChecks.push(checkRunConclusion(node.status, node.conclusion));
-      }
-      continue;
-    }
-    if (context.__typename === "StatusContext") {
-      const node = statusContextNode.parse(context);
-      otherChecks.push(statusContextConclusion(node.state));
-    }
-  }
-
   return {
     number: pullRequest.number,
     title: pullRequest.title,
-    state: pullRequest.state.toLowerCase() as PullRequestState["state"],
+    state:
+      pullRequest.state === "OPEN" ? "open" : pullRequest.state === "MERGED" ? "merged" : "closed",
     draft: pullRequest.isDraft,
     base: pullRequest.baseRefName,
     head: pullRequest.headRefName,
     headSha: pullRequest.headRefOid,
-    isFork: pullRequest.headRepository?.nameWithOwner !== nameWithOwner,
-    labels: (pullRequest.labels?.nodes ?? []).map((label) => label.name),
-    mergeable: mergeableOf(pullRequest.mergeable),
+    isFork: pullRequest.headRepository?.nameWithOwner !== repository.nameWithOwner,
+    labels: (pullRequest.labels?.nodes ?? []).flatMap((label) =>
+      label === null || label === undefined ? [] : [label.name],
+    ),
+    // MERGEABLE / CONFLICTING / UNKNOWN, where UNKNOWN means GitHub is still
+    // computing it: undetermined, not "fine to merge".
+    mergeable:
+      pullRequest.mergeable === "MERGEABLE"
+        ? true
+        : pullRequest.mergeable === "CONFLICTING"
+          ? false
+          : null,
     behindBase: pullRequest.mergeStateStatus === "BEHIND",
-    reviewDecision: pullRequest.reviewDecision as ReviewDecision,
-    otherChecks,
+    reviewDecision: pullRequest.reviewDecision ?? null,
+    otherChecks: otherChecks(contexts, ownCheckName),
   };
 }

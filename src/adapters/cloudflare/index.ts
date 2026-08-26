@@ -58,12 +58,10 @@ export default {
     const context: AppContext = {
       github: createGitHubApiFactory(env, logger),
       logger,
-      clock: { now: () => new Date() },
       // The 202 goes out first; the work continues here.
       deferrer: { defer: (work) => executionContext.waitUntil(work()) },
       env,
       cache: toCache(workerEnv.CACHE),
-      appId: env.appId,
     };
 
     return createWebhookHandler(context)(request);

@@ -29,11 +29,9 @@ const STRATEGY_LABEL: Record<Strategy, string> = {
   rebase: "rebase merge",
 };
 
-const MANUAL_TITLE: Record<Strategy, string> = {
-  squash: "Squash merge",
-  merge: "Merge commit",
-  rebase: "Rebase merge",
-};
+function capitalise(label: string): string {
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
 
 const WAITING: Record<GateReason, { title: string; summary: string }> = {
   draft: {
@@ -73,7 +71,7 @@ export function renderCheck(state: CheckState): CheckOutput {
     case "manual":
       return {
         conclusion: "success",
-        title: MANUAL_TITLE[state.strategy],
+        title: capitalise(STRATEGY_LABEL[state.strategy]),
         summary: `Merge this pull request with a ${STRATEGY_LABEL[state.strategy]}.`,
       };
     case "awaiting-label":

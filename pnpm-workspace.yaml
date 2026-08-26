@@ -1,0 +1,17 @@
+allowBuilds:
+  # wrangler needs both binaries to bundle and run the Worker.
+  esbuild: true
+  workerd: true
+catalog:
+  vite: npm:@voidzero-dev/vite-plus-core@0.3.0
+  vite-plus: 0.3.0
+minimumReleaseAgeExclude:
+  - miniflare@5.20260825.0-alpha
+  - wrangler@4.126.0
+overrides:
+  vite@*: "catalog:"
+peerDependencyRules:
+  allowAny:
+    - vite
+  allowedVersions:
+    vite: "*"

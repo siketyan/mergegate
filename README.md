@@ -417,8 +417,7 @@ src/
   core/        Pure logic (policy, config, event handling) on web standard APIs only
   adapters/
     github/      GitHub API client
-    cloudflare/  Workers entry point (default)
-    node/        Node.js entry point
+    cloudflare/  Workers entry point
 ```
 
 ### Cloudflare Workers
@@ -450,10 +449,9 @@ The core needs nothing but these ports. Implement them and it runs anywhere.
 | `Deferrer` | Work that continues after the response    | `ctx.waitUntil`           |
 | `Cache`    | Config cache and deduplication (optional) | Workers KV                |
 | `Logger`   | Structured logging                        | `console` (JSON)          |
-| `Clock`    | Current time                              | `Date`                    |
 
-The entry point is a plain `(request: Request) => Promise<Response>`. On Node.js, a thin `node:http` adapter
-is all it takes.
+The entry point is a plain `(request: Request) => Promise<Response>`, so another runtime needs an entry point
+that hands it a `Request` and the four ports above — nothing in `core/` changes.
 
 ---
 

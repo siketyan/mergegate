@@ -107,14 +107,12 @@ export function createTestContext(
   const context: AppContext = {
     github: { forInstallation: () => api },
     logger: silentLogger,
-    clock: { now: () => new Date("2026-01-01T00:00:00Z") },
     deferrer: {
       defer: (work) => {
         deferred.push(work());
       },
     },
     env: testEnv,
-    appId: testEnv.appId,
     ...overrides,
   };
 

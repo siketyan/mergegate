@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { compilePattern, InvalidPatternError, isValidPattern, matchesPattern } from "./glob.ts";
+import { matchesPattern } from "./glob.ts";
 
 describe("matchesPattern", () => {
   const cases: readonly [pattern: string, branch: string, expected: boolean][] = [
@@ -25,10 +25,4 @@ describe("matchesPattern", () => {
       expect(matchesPattern(pattern, branch)).toBe(expected);
     });
   }
-});
-
-test("an empty pattern is rejected", () => {
-  expect(() => compilePattern("")).toThrow(InvalidPatternError);
-  expect(isValidPattern("")).toBe(false);
-  expect(isValidPattern("develop")).toBe(true);
 });

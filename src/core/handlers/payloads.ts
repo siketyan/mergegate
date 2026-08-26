@@ -3,64 +3,58 @@
  * actually reads are described here, and they are validated before use.
  */
 
-import { z } from "zod";
+import * as v from "valibot";
 
-const repository = z.object({
-  name: z.string(),
-  owner: z.object({ login: z.string() }),
+const repository = v.object({
+  name: v.string(),
+  owner: v.object({ login: v.string() }),
 });
 
-const installation = z.object({ id: z.number() });
+const installation = v.object({ id: v.number() });
 
-export const pullRequestEventSchema = z.object({
-  action: z.string(),
+/** `pull_request` and `pull_request_review` both carry what evaluation needs. */
+export const pullRequestEventSchema = v.object({
+  action: v.string(),
   installation,
   repository,
-  pull_request: z.object({ number: z.number() }),
+  pull_request: v.object({ number: v.number() }),
 });
 
-export const pullRequestReviewEventSchema = z.object({
-  action: z.string(),
+export const checkSuiteEventSchema = v.object({
+  action: v.string(),
   installation,
   repository,
-  pull_request: z.object({ number: z.number() }),
-});
-
-export const checkSuiteEventSchema = z.object({
-  action: z.string(),
-  installation,
-  repository,
-  check_suite: z.object({
-    head_sha: z.string(),
-    app: z.object({ id: z.number() }),
-    pull_requests: z.array(z.object({ number: z.number() })).default([]),
+  check_suite: v.object({
+    head_sha: v.string(),
+    app: v.object({ id: v.number() }),
+    pull_requests: v.optional(v.array(v.object({ number: v.number() })), []),
   }),
 });
 
-export const checkRunEventSchema = z.object({
-  action: z.string(),
+export const checkRunEventSchema = v.object({
+  action: v.string(),
   installation,
   repository,
-  check_run: z.object({
-    head_sha: z.string(),
-    app: z.object({ id: z.number() }),
+  check_run: v.object({
+    head_sha: v.string(),
+    app: v.object({ id: v.number() }),
   }),
 });
 
-export const statusEventSchema = z.object({
+export const statusEventSchema = v.object({
   installation,
   repository,
-  sha: z.string(),
+  sha: v.string(),
 });
 
-export const pushEventSchema = z.object({
+export const pushEventSchema = v.object({
   installation,
-  repository: z.object({
-    name: z.string(),
-    owner: z.object({ login: z.string() }),
-    default_branch: z.string(),
+  repository: v.object({
+    name: v.string(),
+    owner: v.object({ login: v.string() }),
+    default_branch: v.string(),
   }),
-  ref: z.string(),
+  ref: v.string(),
 });
 
-export type RepositoryPayload = z.output<typeof repository>;
+export type RepositoryPayload = v.InferOutput<typeof repository>;

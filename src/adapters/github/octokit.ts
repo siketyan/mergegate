@@ -1,8 +1,8 @@
 import { createAppAuth } from "@octokit/auth-app";
 import { Octokit } from "@octokit/core";
+import { restEndpointMethods } from "@octokit/plugin-rest-endpoint-methods";
 import { retry } from "@octokit/plugin-retry";
 import { throttling } from "@octokit/plugin-throttling";
-import { z } from "zod";
 import type {
   CheckRunInput,
   Env,
@@ -14,9 +14,10 @@ import type {
   PullRequestState,
   RepoRef,
 } from "../../core/ports.ts";
-import { pullRequestQuery, pullRequestResponseSchema, toPullRequestState } from "./graphql.ts";
+import type { PullRequestStateQuery } from "./generated/graphql.ts";
+import { pullRequestQuery, toPullRequestState } from "./graphql.ts";
 
-const AppOctokit = Octokit.plugin(retry, throttling);
+const AppOctokit = Octokit.plugin(restEndpointMethods, retry, throttling);
 
 type AppOctokitInstance = InstanceType<typeof AppOctokit>;
 
@@ -32,9 +33,10 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-const checkRunsSchema = z.object({
-  check_runs: z.array(z.object({ id: z.number() })),
-});
+function decodeBase64(content: string): string {
+  const binary = atob(content.replaceAll("\n", ""));
+  return new TextDecoder().decode(Uint8Array.from(binary, (character) => character.charCodeAt(0)));
+}
 
 class OctokitGitHubApi implements GitHubApi {
   readonly #octokit: AppOctokitInstance;
@@ -47,15 +49,21 @@ class OctokitGitHubApi implements GitHubApi {
 
   async readDefaultBranchFile(repo: RepoRef, path: string): Promise<string | null> {
     try {
-      // No `ref`, so GitHub serves the default branch. The raw media type gives
-      // the file back as-is instead of base64 in a JSON envelope.
-      const response = await this.#octokit.request("GET /repos/{owner}/{repo}/contents/{path}", {
+      // No `ref`, so GitHub serves the default branch.
+      const { data } = await this.#octokit.rest.repos.getContent({
         owner: repo.owner,
         repo: repo.repo,
         path,
-        headers: { accept: "application/vnd.github.raw" },
       });
-      return z.string().parse(response.data);
+      if (Array.isArray(data) || data.type !== "file") {
+        return null;
+      }
+      if (data.encoding !== "base64") {
+        // Too large to be inlined. Refusing beats guessing: the caller fails the
+        // check rather than treating the repository as unconfigured.
+        throw new Error(`${path} was returned with encoding ${data.encoding}`);
+      }
+      return decodeBase64(data.content);
     } catch (error) {
       if (statusOf(error) === 404) {
         return null;
@@ -69,43 +77,34 @@ class OctokitGitHubApi implements GitHubApi {
     pullNumber: number,
     options: { readonly ownCheckName: string },
   ): Promise<PullRequestState | null> {
-    const response = await this.#octokit.graphql(pullRequestQuery, {
+    const response = await this.#octokit.graphql<PullRequestStateQuery>(pullRequestQuery, {
       owner: repo.owner,
       repo: repo.repo,
       number: pullNumber,
       // `mergeStateStatus` still lives behind this media type.
       headers: { accept: "application/vnd.github.merge-info-preview+json" },
     });
-
-    const parsed = pullRequestResponseSchema.safeParse(response);
-    if (!parsed.success || parsed.data.repository.pullRequest === null) {
-      return null;
-    }
-    return toPullRequestState(parsed.data, options.ownCheckName);
+    return toPullRequestState(response, options.ownCheckName);
   }
 
   async upsertCheckRun(repo: RepoRef, input: CheckRunInput): Promise<void> {
     // Invariant: one check run per (name, head sha). Look first, then update.
-    const existing = await this.#octokit.request(
-      "GET /repos/{owner}/{repo}/commits/{ref}/check-runs",
-      {
-        owner: repo.owner,
-        repo: repo.repo,
-        ref: input.headSha,
-        check_name: input.name,
-        app_id: this.#appId,
-      },
-    );
+    const { data } = await this.#octokit.rest.checks.listForRef({
+      owner: repo.owner,
+      repo: repo.repo,
+      ref: input.headSha,
+      check_name: input.name,
+      app_id: this.#appId,
+    });
 
-    const { check_runs: checkRuns } = checkRunsSchema.parse(existing.data);
     const output = { title: input.title, summary: input.summary };
+    const existing = data.check_runs[0];
 
-    const current = checkRuns[0];
-    if (current !== undefined) {
-      await this.#octokit.request("PATCH /repos/{owner}/{repo}/check-runs/{check_run_id}", {
+    if (existing !== undefined) {
+      await this.#octokit.rest.checks.update({
         owner: repo.owner,
         repo: repo.repo,
-        check_run_id: current.id,
+        check_run_id: Number(existing.id),
         status: "completed",
         conclusion: input.conclusion,
         output,
@@ -113,7 +112,7 @@ class OctokitGitHubApi implements GitHubApi {
       return;
     }
 
-    await this.#octokit.request("POST /repos/{owner}/{repo}/check-runs", {
+    await this.#octokit.rest.checks.create({
       owner: repo.owner,
       repo: repo.repo,
       name: input.name,
@@ -125,14 +124,12 @@ class OctokitGitHubApi implements GitHubApi {
   }
 
   async findPullRequestsForSha(repo: RepoRef, sha: string): Promise<readonly number[]> {
-    const response = await this.#octokit.request(
-      "GET /repos/{owner}/{repo}/commits/{commit_sha}/pulls",
-      { owner: repo.owner, repo: repo.repo, commit_sha: sha },
-    );
-    return z
-      .array(z.object({ number: z.number() }))
-      .parse(response.data)
-      .map((pull) => pull.number);
+    const { data } = await this.#octokit.rest.repos.listPullRequestsAssociatedWithCommit({
+      owner: repo.owner,
+      repo: repo.repo,
+      commit_sha: sha,
+    });
+    return data.map((pull) => pull.number);
   }
 
   async mergePullRequest(
@@ -141,20 +138,16 @@ class OctokitGitHubApi implements GitHubApi {
     input: MergeInput,
   ): Promise<MergeOutcome> {
     try {
-      const response = await this.#octokit.request(
-        "PUT /repos/{owner}/{repo}/pulls/{pull_number}/merge",
-        {
-          owner: repo.owner,
-          repo: repo.repo,
-          pull_number: pullNumber,
-          merge_method: input.method,
-          sha: input.sha,
-          ...(input.commitTitle === "" ? {} : { commit_title: input.commitTitle }),
-          ...(input.commitMessage === "" ? {} : { commit_message: input.commitMessage }),
-        },
-      );
-      const { sha } = z.object({ sha: z.string() }).parse(response.data);
-      return { ok: true, sha };
+      const { data } = await this.#octokit.rest.pulls.merge({
+        owner: repo.owner,
+        repo: repo.repo,
+        pull_number: pullNumber,
+        merge_method: input.method,
+        sha: input.sha,
+        ...(input.commitTitle === "" ? {} : { commit_title: input.commitTitle }),
+        ...(input.commitMessage === "" ? {} : { commit_message: input.commitMessage }),
+      });
+      return { ok: true, sha: data.sha };
     } catch (error) {
       return toMergeFailure(error);
     }
@@ -162,10 +155,12 @@ class OctokitGitHubApi implements GitHubApi {
 
   async removeLabel(repo: RepoRef, pullNumber: number, label: string): Promise<void> {
     try {
-      await this.#octokit.request(
-        "DELETE /repos/{owner}/{repo}/issues/{issue_number}/labels/{name}",
-        { owner: repo.owner, repo: repo.repo, issue_number: pullNumber, name: label },
-      );
+      await this.#octokit.rest.issues.removeLabel({
+        owner: repo.owner,
+        repo: repo.repo,
+        issue_number: pullNumber,
+        name: label,
+      });
     } catch (error) {
       // Already gone is the state we wanted.
       if (statusOf(error) !== 404) {
@@ -176,13 +171,14 @@ class OctokitGitHubApi implements GitHubApi {
 
   async deleteBranch(repo: RepoRef, branch: string): Promise<void> {
     try {
-      await this.#octokit.request("DELETE /repos/{owner}/{repo}/git/refs/{ref}", {
+      await this.#octokit.rest.git.deleteRef({
         owner: repo.owner,
         repo: repo.repo,
         ref: `heads/${branch}`,
       });
     } catch (error) {
-      if (statusOf(error) !== 404 && statusOf(error) !== 422) {
+      const status = statusOf(error);
+      if (status !== 404 && status !== 422) {
         throw error;
       }
     }

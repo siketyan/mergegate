@@ -3,26 +3,21 @@ import { handleDelivery } from "./handlers/index.ts";
 
 const encoder = new TextEncoder();
 
-function toHex(bytes: Uint8Array): string {
-  let hex = "";
-  for (const byte of bytes) {
-    hex += byte.toString(16).padStart(2, "0");
+function fromHex(hex: string): Uint8Array<ArrayBuffer> | null {
+  if (hex.length % 2 !== 0 || !/^[0-9a-f]*$/i.test(hex)) {
+    return null;
   }
-  return hex;
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let index = 0; index < bytes.length; index += 1) {
+    bytes[index] = Number.parseInt(hex.slice(index * 2, index * 2 + 2), 16);
+  }
+  return bytes;
 }
 
-/** Comparison that does not short-circuit on the first differing byte. */
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) {
-    return false;
-  }
-  let difference = 0;
-  for (let index = 0; index < a.length; index += 1) {
-    difference |= a.charCodeAt(index) ^ b.charCodeAt(index);
-  }
-  return difference === 0;
-}
-
+/**
+ * WebCrypto compares the tag itself, in constant time, so nothing here has to
+ * hand-roll that comparison.
+ */
 export async function verifySignature(
   secret: string,
   payload: string,
@@ -31,15 +26,18 @@ export async function verifySignature(
   if (signature === null || !signature.startsWith("sha256=")) {
     return false;
   }
+  const mac = fromHex(signature.slice("sha256=".length));
+  if (mac === null) {
+    return false;
+  }
   const key = await crypto.subtle.importKey(
     "raw",
     encoder.encode(secret),
     { name: "HMAC", hash: "SHA-256" },
     false,
-    ["sign"],
+    ["verify"],
   );
-  const mac = await crypto.subtle.sign("HMAC", key, encoder.encode(payload));
-  return timingSafeEqual(`sha256=${toHex(new Uint8Array(mac))}`, signature);
+  return crypto.subtle.verify("HMAC", key, mac, encoder.encode(payload));
 }
 
 function json(status: number, body: Record<string, unknown>): Response {

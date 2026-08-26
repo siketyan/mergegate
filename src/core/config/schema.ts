@@ -1,55 +1,55 @@
-import { z } from "zod";
-import { isValidPattern } from "../policy/glob.ts";
+import * as v from "valibot";
 
-const branchPattern = z
-  .string()
-  .refine(isValidPattern, { message: "must be a non-empty branch pattern" });
+const branchPattern = v.pipe(v.string(), v.minLength(1, "must be a non-empty branch pattern"));
 
 /** A strategy a pull request can actually be merged with. */
-export const strategySchema = z.enum(["squash", "merge", "rebase"]);
+export const strategySchema = v.picklist(["squash", "merge", "rebase"]);
 
 /** What a rule may ask for, including refusing the pull request outright. */
-export const ruleStrategySchema = z.enum(["squash", "merge", "rebase", "forbid"]);
+export const ruleStrategySchema = v.picklist(["squash", "merge", "rebase", "forbid"]);
 
-export const ruleSchema = z.strictObject({
+export const ruleSchema = v.strictObject({
   base: branchPattern,
-  head: branchPattern.prefault("**"),
+  head: v.optional(branchPattern, "**"),
   strategy: ruleStrategySchema,
 });
 
-export const configSchema = z.strictObject({
-  version: z.literal(1),
-  defaults: z
-    .strictObject({
-      strategy: strategySchema.prefault("squash"),
-    })
-    .prefault({}),
-  check: z
-    .strictObject({
-      name: z.string().min(1).prefault("squashables"),
-    })
-    .prefault({}),
-  merge: z
-    .strictObject({
-      label: z.string().min(1).prefault("ready-to-merge"),
-      manual: z.array(strategySchema).prefault(["squash"]),
-      requireApproval: z.boolean().prefault(true),
-      requireChecks: z.boolean().prefault(true),
-      requireUpToDate: z.boolean().prefault(false),
-      allowForkHead: z.boolean().prefault(false),
-      deleteBranchOnMerge: z.boolean().prefault(false),
-      removeLabelOnFailure: z.boolean().prefault(true),
-      commitTitle: z.string().prefault("Merge {head} into {base} (#{number})"),
-      commitMessage: z.string().prefault(""),
-    })
-    .prefault({}),
-  rules: z.array(ruleSchema).prefault([]),
+export const configSchema = v.strictObject({
+  version: v.literal(1),
+  defaults: v.optional(
+    v.strictObject({
+      strategy: v.optional(strategySchema, "squash"),
+    }),
+    {},
+  ),
+  check: v.optional(
+    v.strictObject({
+      name: v.optional(v.pipe(v.string(), v.minLength(1)), "squashables"),
+    }),
+    {},
+  ),
+  merge: v.optional(
+    v.strictObject({
+      label: v.optional(v.pipe(v.string(), v.minLength(1)), "ready-to-merge"),
+      manual: v.optional(v.array(strategySchema), ["squash"]),
+      requireApproval: v.optional(v.boolean(), true),
+      requireChecks: v.optional(v.boolean(), true),
+      requireUpToDate: v.optional(v.boolean(), false),
+      allowForkHead: v.optional(v.boolean(), false),
+      deleteBranchOnMerge: v.optional(v.boolean(), false),
+      removeLabelOnFailure: v.optional(v.boolean(), true),
+      commitTitle: v.optional(v.string(), "Merge {head} into {base} (#{number})"),
+      commitMessage: v.optional(v.string(), ""),
+    }),
+    {},
+  ),
+  rules: v.optional(v.array(ruleSchema), []),
 });
 
-export type Strategy = z.output<typeof strategySchema>;
-export type RuleStrategy = z.output<typeof ruleStrategySchema>;
-export type Rule = z.output<typeof ruleSchema>;
-export type Config = z.output<typeof configSchema>;
+export type Strategy = v.InferOutput<typeof strategySchema>;
+export type RuleStrategy = v.InferOutput<typeof ruleStrategySchema>;
+export type Rule = v.InferOutput<typeof ruleSchema>;
+export type Config = v.InferOutput<typeof configSchema>;
 export type MergeSettings = Config["merge"];
 
 /** The check run name used before the configuration could be read. */
