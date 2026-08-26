@@ -14,8 +14,10 @@ update the README as well.** The README is the specification; the implementation
 
 ## Current state
 
-Design phase. Only README.md and CLAUDE.md exist; there is no implementation yet. When implementation
-starts, scaffold it according to the layout below.
+Scaffolded. `core` is implemented and tested: configuration parsing, the policy that turns
+`(base, head)` into a decision, the merge gate, check run rendering, webhook signature verification and
+the event handlers. The Cloudflare and Node adapters wire it up, and the Octokit adapter implements the
+`GitHubApi` port. Nothing has been deployed and the app has never talked to real GitHub yet.
 
 ## Stack
 
@@ -52,15 +54,22 @@ src/
     policy/                # (base, head, config) -> Decision, pure functions. The heart of the app
     check/                 # Building check run output (title / summary)
     handlers/              # Per-event webhook handling, talking to GitHub through ports
+    policy/gate.ts         # Merge readiness: the gates GitHub would apply if we did not bypass it
     ports.ts               # GitHubApi, Env, Cache, Logger, Clock, Deferrer interfaces
     webhook.ts             # Signature verification and dispatch. (Request) => Promise<Response>
   adapters/
     github/                # GitHubApi implementation over Octokit (REST + GraphQL)
     cloudflare/            # Workers entry: env bindings, ctx.waitUntil, KV
     node/                  # node:http entry (self-hosting and local verification)
+    shared/                # Adapter-side helpers both runtimes use (logger, env, memory cache)
 test/
   fixtures/                # Real webhook payload samples
+  fake-github.ts           # In-memory GitHubApi and test context
+  architecture.test.ts     # Checks the layering rules below rather than trusting them
 ```
+
+Unit tests live next to the code they cover as `*.test.ts`. `test/` holds fixtures and anything shared
+between test files.
 
 **Dependencies always point `adapters -> core`.**
 
