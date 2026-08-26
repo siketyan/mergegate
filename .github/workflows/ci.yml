@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          # Keep in step with devEngines.packageManager in package.json.
+          version: 11.24.0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Format, lint and typecheck. No --fix: CI reports, it does not rewrite.
+      - name: Check
+        run: pnpm exec vp check
+
+      - name: Test
+        run: pnpm exec vp test
+
+      # The GraphQL types are generated from GitHub's published schema and
+      # committed, so a query edited without regenerating them is a stale file.
+      - name: Generated types are up to date
+        run: |
+          pnpm exec vp run codegen
+          git diff --exit-code -- src/adapters/github/generated
+
+      # Catches a Worker that type-checks but cannot be bundled, before the
+      # deploy that Cloudflare runs on merge does.
+      - name: Bundle
+        run: pnpm exec wrangler deploy --dry-run --outdir "$RUNNER_TEMP/worker"
