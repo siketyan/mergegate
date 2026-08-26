@@ -195,7 +195,7 @@ Create one ruleset targeting the base branches you want to protect (`develop`, `
 | └ Allowed merge methods               | **Squash** only (what humans are allowed to pick)     |
 | Require status checks to pass         | Enabled                                               |
 | └ Required check                      | `mergegate` (select mergegate as the providing app)   |
-| Bypass list                           | mergegate (mode: **For pull requests only**)          |
+| Bypass list                           | mergegate (mode: **Always allow**)                    |
 
 That completes the division of labour:
 
@@ -203,9 +203,12 @@ That completes the division of labour:
 - Promotion PRs fail the `mergegate` check — **no more accidental squashes**
 - Only the app can bypass and create the merge commit
 
-> [!NOTE]
-> "For pull requests only" is enough. The app never pushes to a protected branch outside of merging a PR.
-> Switch to "Always allow" only if merges are rejected in your setup.
+> [!IMPORTANT]
+> **"For pull requests only" does not work here.** It reads like the right mode — the app only ever merges
+> pull requests — but the ruleset still refuses the merge and the app reports the API's error in the check
+> run. Use "Always allow". The app's own restraint is what keeps the bypass narrow: it merges through
+> `PUT /pulls/{n}/merge` and nothing else, never pushing to a protected branch, and it re-verifies review
+> and CI itself before doing so.
 
 ### 4. Add the configuration file
 
@@ -589,8 +592,10 @@ sends the first two to apps with **Checks: read & write** — which the table ab
   press is honoured, and the press is tied to the commit it was rendered on. It merges or it does not: the
   app never writes a label to stand in for you. `merge.allowCheckAction: false` removes the button and stops
   the app from honouring it at all.
-- **Bypass is kept narrow.** "For pull requests only" is the recommended mode. Bypassing is the price of this
-  design, which is exactly why the app re-verifies CI and review itself.
+- **Bypass is wide, and the app is not.** The bypass entry has to be "Always allow" — GitHub refuses the
+  merge otherwise — so the narrowing is done by the app: it only ever calls `PUT /pulls/{n}/merge`, only for
+  a pull request a rule made assisted, and only after re-verifying review, other checks and mergeability
+  itself. Bypassing is the price of this design, which is exactly why that re-verification exists.
 - **No state is owned by the app.** Everything needed for a decision comes from the GitHub API. The only
   things persisted are a config cache and delivery-ID deduplication, and losing either is harmless.
 
