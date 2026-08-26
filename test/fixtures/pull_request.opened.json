@@ -9,19 +9,19 @@
     "head": {
       "ref": "develop",
       "sha": "c0ffee0000000000000000000000000000000000",
-      "repo": { "full_name": "siketyan/squashables" }
+      "repo": { "full_name": "siketyan/mergegate" }
     },
     "base": {
       "ref": "staging",
       "sha": "beef000000000000000000000000000000000000",
-      "repo": { "full_name": "siketyan/squashables" }
+      "repo": { "full_name": "siketyan/mergegate" }
     },
     "labels": []
   },
   "repository": {
     "id": 1,
-    "name": "squashables",
-    "full_name": "siketyan/squashables",
+    "name": "mergegate",
+    "full_name": "siketyan/mergegate",
     "default_branch": "main",
     "owner": { "login": "siketyan", "type": "User" }
   },

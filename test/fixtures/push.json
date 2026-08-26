@@ -4,8 +4,8 @@
   "after": "cafe000000000000000000000000000000000000",
   "repository": {
     "id": 1,
-    "name": "squashables",
-    "full_name": "siketyan/squashables",
+    "name": "mergegate",
+    "full_name": "siketyan/mergegate",
     "default_branch": "main",
     "owner": { "login": "siketyan", "type": "User" }
   },

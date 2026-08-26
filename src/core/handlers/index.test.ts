@@ -66,7 +66,7 @@ test("a push to the default branch drops the cached configuration", async () => 
   const { context } = createTestContext(api, { cache });
 
   await handleDelivery(context, "push", await fixture("push"));
-  expect(deleted).toEqual(["config:siketyan/squashables"]);
+  expect(deleted).toEqual(["config:siketyan/mergegate"]);
 
   const onABranch = { ...(await fixture("push")), ref: "refs/heads/feature/x" };
   await handleDelivery(context, "push", onABranch);

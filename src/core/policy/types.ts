@@ -9,7 +9,7 @@ export type RuleMatch =
  * What a pull request is allowed to do.
  *
  * - `manual`: a human merges it from the GitHub UI (the check passes).
- * - `assisted`: squashables merges it once the label is added (the check fails
+ * - `assisted`: mergegate merges it once the label is added (the check fails
  *   until then, so the ruleset blocks everyone else).
  * - `forbidden`: nobody may merge it.
  */

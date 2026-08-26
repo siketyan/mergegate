@@ -40,7 +40,7 @@ test("every gate reason blocks the merge", () => {
 test("a merged pull request ends green so the history carries no red X", () => {
   expect(renderCheck({ kind: "merged", strategy: "merge" })).toMatchObject({
     conclusion: "success",
-    title: "Merged by squashables",
+    title: "Merged by mergegate",
   });
 });
 
@@ -48,7 +48,7 @@ test("a forbidden pair names both branches and cannot be cleared", () => {
   expect(renderCheck({ kind: "forbidden", base: "production", head: "develop" })).toEqual({
     conclusion: "failure",
     title: "Pull requests into production from develop are not allowed",
-    summary: expect.stringContaining(".github/squashables.yml"),
+    summary: expect.stringContaining(".github/mergegate.yml"),
   });
 });
 
@@ -58,6 +58,6 @@ test("an unreadable configuration fails closed and lists why", () => {
     errors: ["version: expected 1", "rules[0].base: must be a non-empty branch pattern"],
   });
   expect(output.conclusion).toBe("failure");
-  expect(output.title).toBe("Invalid .github/squashables.yml");
+  expect(output.title).toBe("Invalid .github/mergegate.yml");
   expect(output.summary).toContain("rules[0].base");
 });

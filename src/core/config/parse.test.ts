@@ -18,7 +18,7 @@ test("a minimal file gets every default", () => {
   expect(result.config).toEqual({
     version: 1,
     defaults: { strategy: "squash" },
-    check: { name: "squashables" },
+    check: { name: "mergegate" },
     merge: {
       label: "ready-to-merge",
       manual: ["squash"],

@@ -106,7 +106,7 @@ function statusContextConclusion(state: string): CheckConclusion {
   }
 }
 
-/** Every check on the head commit except the one squashables owns. */
+/** Every check on the head commit except the one mergegate owns. */
 function otherChecks(
   nodes: readonly (StatusContextNode | null)[],
   ownCheckName: string,

@@ -34,14 +34,14 @@ export interface GateInput {
   readonly mergeable: boolean | null;
   readonly behindBase: boolean;
   readonly reviewDecision: ReviewDecision;
-  /** Conclusions of every check except the one squashables owns. */
+  /** Conclusions of every check except the one mergegate owns. */
   readonly otherChecks: readonly CheckConclusion[];
 }
 
 const PASSING: ReadonlySet<CheckConclusion> = new Set(["success", "neutral", "skipped"]);
 
 /**
- * The label is not a sufficient condition. squashables bypasses the ruleset, so
+ * The label is not a sufficient condition. mergegate bypasses the ruleset, so
  * GitHub's own gates do not apply and this function has to stand in for them.
  */
 export function evaluateGate(input: GateInput, settings: MergeSettings): GateResult {

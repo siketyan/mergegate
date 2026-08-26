@@ -15,7 +15,7 @@ export type ConfigResult =
   | { readonly ok: false; readonly errors: readonly string[] };
 
 /**
- * Parse `.github/squashables.yml`. Never throws: an unparseable configuration is
+ * Parse `.github/mergegate.yml`. Never throws: an unparseable configuration is
  * a decision the app cannot make, and the caller fails the check run with these
  * messages.
  */

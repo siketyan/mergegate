@@ -2,16 +2,16 @@
   "action": "completed",
   "check_run": {
     "id": 900,
-    "name": "squashables",
+    "name": "mergegate",
     "head_sha": "c0ffee0000000000000000000000000000000000",
     "status": "completed",
     "conclusion": "action_required",
-    "app": { "id": 1234, "slug": "squashables" }
+    "app": { "id": 1234, "slug": "mergegate" }
   },
   "repository": {
     "id": 1,
-    "name": "squashables",
-    "full_name": "siketyan/squashables",
+    "name": "mergegate",
+    "full_name": "siketyan/mergegate",
     "default_branch": "main",
     "owner": { "login": "siketyan", "type": "User" }
   },

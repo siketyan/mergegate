@@ -1,4 +1,7 @@
-# squashables
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/logo-dark.svg">
+  <img src="docs/logo.svg" alt="mergegate" width="320">
+</picture>
 
 A GitHub App that **enforces the right merge strategy per pull request** in repositories with multiple
 long-lived branches.
@@ -6,7 +9,7 @@ long-lived branches.
 - Squash merge is the rule. But promotion PRs such as `develop -> staging` **must be merge commits**.
 - GitHub cannot express this on its own, so anyone can pick the wrong strategy from the merge button.
 
-squashables decides which merge strategy a PR is allowed to use from its `(base, head)` pair. PRs that
+mergegate decides which merge strategy a PR is allowed to use from its `(base, head)` pair. PRs that
 must not be squashed get a failing check, which **blocks the merge button entirely**. When such a PR is
 ready, add the `ready-to-merge` label and **the app merges it for you** with the correct strategy.
 
@@ -59,7 +62,7 @@ then on. Merge-commit a feature PR and `develop`'s history fills up with WIP com
 | Ruleset rule "Require a pull request before merging" > **Allowed merge methods** | **Per base branch** | Cannot condition on the head branch |
 
 The ruleset merge method rule is powerful, and if the base branch alone determines the strategy, it is all
-you need. **squashables exists for the case where the same base needs different strategies depending on the
+you need. **mergegate exists for the case where the same base needs different strategies depending on the
 head branch.**
 
 In a `main` / `release` setup, for instance:
@@ -78,12 +81,12 @@ branch pair** outright, e.g. "never open `feature/* -> production`".
 
 ## How it works
 
-squashables receives pull request webhooks and sorts every PR into one of three buckets according to your
+mergegate receives pull request webhooks and sorts every PR into one of three buckets according to your
 configuration file.
 
 ```mermaid
 flowchart TD
-    A["Pull request event"] --> B["Read .github/squashables.yml<br/>from the default branch"]
+    A["Pull request event"] --> B["Read .github/mergegate.yml<br/>from the default branch"]
     B --> C{"Rule matching<br/>(base, head)"}
     C -->|"strategy: squash"| D["Check: success<br/>a human squash merges"]
     C -->|"strategy: merge / rebase"| E["Check: action_required<br/>merging is blocked"]
@@ -109,18 +112,18 @@ Two ideas carry the whole design.
 sequenceDiagram
     participant Dev as Developer
     participant GH as GitHub
-    participant App as squashables
+    participant App as mergegate
 
     Dev->>GH: Open develop -> staging
     GH->>App: pull_request.opened
-    App->>GH: Check "squashables" = action_required<br/>"Merge commit required. Add the ready-to-merge label."
+    App->>GH: Check "mergegate" = action_required<br/>"Merge commit required. Add the ready-to-merge label."
     Note over GH: The ruleset disables the merge button
     Dev->>GH: Add the ready-to-merge label
     GH->>App: pull_request.labeled
     App->>GH: Verify checks, review and mergeability
     alt All good
         App->>GH: PUT /pulls/:n/merge (merge_method=merge, sha=<evaluated head>)
-        App->>GH: Check "squashables" = success "Merged with a merge commit"
+        App->>GH: Check "mergegate" = success "Merged with a merge commit"
     else CI still running
         App->>GH: Update the check and wait (re-evaluated when CI finishes)
     else Conflict or other hard failure
@@ -137,7 +140,7 @@ Labelling a PR while CI is still running is fine. The app re-evaluates on `check
 
 ### 1. Install the app
 
-Install squashables on the repository (or the whole organization). See
+Install mergegate on the repository (or the whole organization). See
 [Permissions and security](#permissions-and-security) for what it asks for.
 
 ### 2. Repository settings
@@ -157,19 +160,19 @@ Under Settings > General > Pull Requests, **enable every merge method you intend
 
 Create one ruleset targeting the base branches you want to protect (`develop`, `staging`, `production`, …).
 
-| Setting                               | Value                                                   |
-| ------------------------------------- | ------------------------------------------------------- |
-| Target branches                       | `develop`, `staging`, `production` (whatever you run)   |
-| Require a pull request before merging | Enabled                                                 |
-| └ Allowed merge methods               | **Squash** only (what humans are allowed to pick)       |
-| Require status checks to pass         | Enabled                                                 |
-| └ Required check                      | `squashables` (select squashables as the providing app) |
-| Bypass list                           | squashables (mode: **For pull requests only**)          |
+| Setting                               | Value                                                 |
+| ------------------------------------- | ----------------------------------------------------- |
+| Target branches                       | `develop`, `staging`, `production` (whatever you run) |
+| Require a pull request before merging | Enabled                                               |
+| └ Allowed merge methods               | **Squash** only (what humans are allowed to pick)     |
+| Require status checks to pass         | Enabled                                               |
+| └ Required check                      | `mergegate` (select mergegate as the providing app)   |
+| Bypass list                           | mergegate (mode: **For pull requests only**)          |
 
 That completes the division of labour:
 
 - The only method a human can pick in the UI is squash — **no more accidental merge commits on feature PRs**
-- Promotion PRs fail the `squashables` check — **no more accidental squashes**
+- Promotion PRs fail the `mergegate` check — **no more accidental squashes**
 - Only the app can bypass and create the merge commit
 
 > [!NOTE]
@@ -178,7 +181,7 @@ That completes the division of labour:
 
 ### 4. Add the configuration file
 
-Add `.github/squashables.yml` **to your default branch** (see the next section).
+Add `.github/mergegate.yml` **to your default branch** (see the next section).
 In a repository with no configuration file every PR is treated as `squash` — the check passes and the app
 stays out of the way.
 
@@ -186,7 +189,7 @@ stays out of the way.
 
 ## Configuration
 
-`.github/squashables.yml` is read **from the default branch**, never from the PR head, so that a PR cannot
+`.github/mergegate.yml` is read **from the default branch**, never from the PR head, so that a PR cannot
 rewrite the rules that govern it.
 
 ### Example: develop / staging / production
@@ -252,13 +255,13 @@ defaults:
   strategy: squash # Strategy for PRs that match no rule
 
 check:
-  name: squashables # Check run name. Must match what you register in the ruleset
+  name: mergegate # Check run name. Must match what you register in the ruleset
 
 merge:
   label: ready-to-merge # Label that triggers an assisted merge
   manual: [squash] # Strategies a human may merge from the UI. Keep in sync with Allowed merge methods
   requireApproval: true # The review must be approved (or not required)
-  requireChecks: true # Every check other than squashables must have succeeded
+  requireChecks: true # Every check other than mergegate must have succeeded
   requireUpToDate: false # The head must be up to date with the base
   allowForkHead: false # Whether PRs from forks may match non-squash rules
   deleteBranchOnMerge: false # Delete the head branch after merging
@@ -283,12 +286,12 @@ rules:
 
 #### What each strategy means
 
-| strategy | Check                                       | Merged by                            |
-| -------- | ------------------------------------------- | ------------------------------------ |
-| `squash` | success                                     | A human, via "Squash and merge"      |
-| `merge`  | action_required, then success once labelled | squashables (`merge_method: merge`)  |
-| `rebase` | action_required, then success once labelled | squashables (`merge_method: rebase`) |
-| `forbid` | failure (permanent)                         | Nobody                               |
+| strategy | Check                                       | Merged by                          |
+| -------- | ------------------------------------------- | ---------------------------------- |
+| `squash` | success                                     | A human, via "Squash and merge"    |
+| `merge`  | action_required, then success once labelled | mergegate (`merge_method: merge`)  |
+| `rebase` | action_required, then success once labelled | mergegate (`merge_method: rebase`) |
+| `forbid` | failure (permanent)                         | Nobody                             |
 
 A strategy listed in `merge.manual` means "a human merges this"; anything else means "the app merges this".
 The default is `[squash]`. If merge commits are your primary strategy, set `manual: [merge]` instead.
@@ -299,16 +302,16 @@ The default is `[squash]`. If merge commits are your primary strategy, set `manu
 
 ### An ordinary feature PR
 
-Nothing changes. The `squashables` check goes green and you press "Squash and merge". The ruleset makes sure
+Nothing changes. The `mergegate` check goes green and you press "Squash and merge". The ruleset makes sure
 merge commit and rebase are not even offered.
 
 ### A promotion PR (`develop -> staging` and similar)
 
-1. Open the PR. The `squashables` check reports **Action required** and the merge button is disabled.
+1. Open the PR. The `mergegate` check reports **Action required** and the merge button is disabled.
 2. The check details explain that this PR will be merged with a merge commit once you add the
    `ready-to-merge` label.
 3. When review and CI are done, add the `ready-to-merge` label.
-4. squashables merges it with a merge commit. If CI is still running when you label it, the app waits and
+4. mergegate merges it with a merge commit. If CI is still running when you label it, the app waits and
    merges once CI finishes.
 
 **Changed your mind?** Remove the label. As long as the merge has not started, it is cancelled.
@@ -334,9 +337,9 @@ right base branch — changing the base triggers a fresh evaluation — or close
 | Labelled, mergeability not computed yet            | `action_required` | `Waiting for GitHub to compute mergeability`            |
 | Labelled, behind the base (with `requireUpToDate`) | `action_required` | `Waiting for the branch to be up to date`               |
 | Labelled, the merge API refused                    | `action_required` | `Cannot merge`                                          |
-| Assisted merge succeeded                           | `success`         | `Merged by squashables`                                 |
+| Assisted merge succeeded                           | `success`         | `Merged by mergegate`                                   |
 | Forbidden branch pair                              | `failure`         | `Pull requests into <base> from <head> are not allowed` |
-| Broken configuration                               | `failure`         | `Invalid .github/squashables.yml`                       |
+| Broken configuration                               | `failure`         | `Invalid .github/mergegate.yml`                         |
 
 The first row's title names whichever strategy `merge.manual` lists, so a repository whose humans merge with
 merge commits sees `Merge commit` there instead.
@@ -346,7 +349,7 @@ merge. The check is flipped to `success` after an assisted merge so that merged 
 their history.
 
 > [!NOTE]
-> squashables is **fail-closed**: a PR it cannot make a decision about stays blocked. If the app is down, the
+> mergegate is **fail-closed**: a PR it cannot make a decision about stays blocked. If the app is down, the
 > required check is never reported and merges are blocked as well.
 
 ---
@@ -357,14 +360,14 @@ Even with the `ready-to-merge` label present, the app merges only once all of th
 
 - The PR is open and not a draft
 - `mergeable` is true (no conflict with the base)
-- With `merge.requireChecks: true`, every check run and commit status other than `squashables` is
+- With `merge.requireChecks: true`, every check run and commit status other than `mergegate` is
   success, neutral or skipped
 - With `merge.requireApproval: true`, `reviewDecision` is `APPROVED` or reviews are not required (`null`).
   `CHANGES_REQUESTED` is always refused
 - With `merge.requireUpToDate: true`, the head is up to date with the base
 
 The merge call carries **the head SHA that was evaluated**. If a new commit is pushed in between, GitHub
-returns 409, and squashables aborts and re-evaluates — an unreviewed commit never sneaks into a merge.
+returns 409, and mergegate aborts and re-evaluates — an unreviewed commit never sneaks into a merge.
 
 ### When it fails
 
@@ -393,13 +396,13 @@ returns 409, and squashables aborts and re-evaluates — an unreviewed commit ne
 
 ### Guarantees by design
 
-- **Configuration is read from the default branch only.** Editing `.github/squashables.yml` on a PR branch
+- **Configuration is read from the default branch only.** Editing `.github/mergegate.yml` on a PR branch
   has no effect on that PR.
 - **Signatures are verified.** `X-Hub-Signature-256` is checked with HMAC-SHA256 using a constant-time
   comparison; anything else is rejected with 401.
 - **Labelling requires write access**, so the trigger for an assisted merge rides on GitHub's own permission
   model.
-- **The app ignores its own events.** `check_run` events for check runs squashables created are dropped, so
+- **The app ignores its own events.** `check_run` events for check runs mergegate created are dropped, so
   it cannot loop.
 - **Bypass is kept narrow.** "For pull requests only" is the recommended mode. Bypassing is the price of this
   design, which is exactly why the app re-verifies CI and review itself.
@@ -410,7 +413,7 @@ returns 409, and squashables aborts and re-evaluates — an unreviewed commit ne
 
 ## Self-hosting
 
-squashables targets Cloudflare Workers, but its core is **runtime-agnostic**.
+mergegate targets Cloudflare Workers, but its core is **runtime-agnostic**.
 
 ```
 src/
