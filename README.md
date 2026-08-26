@@ -228,9 +228,10 @@ reaches a check run. Point at it from the top of the file:
 version: 1
 ```
 
-It is generated from the same schema the app validates with, so the two cannot drift apart. The one rule it
-cannot express is that `includeTransitive` needs a head that names a branch rather than only a pattern; the
-app checks that and reports it in the check run.
+It is generated from the same schema the app validates with, so the two cannot drift apart. What it cannot
+express are the two rules that relate one key to another: `includeTransitive` needs a head that names a
+branch rather than only a pattern, and `includeReversed` needs a head other than the catch-all. The app
+checks both and reports them in the check run.
 
 ### Example: develop / staging / production
 
@@ -270,13 +271,11 @@ rules:
 version: 1
 
 rules:
+  # main and release promote into each other, so one rule covers both
+  # directions: main -> release and the back merge release -> main.
   - base: release
     head: main
-    strategy: merge
-
-  # The back-merge from release is a merge commit too
-  - base: main
-    head: release
+    includeReversed: true
     strategy: merge
 
   - base: release
@@ -347,6 +346,42 @@ not meant for.
 Either way the guard rails hold: a `forbid` rule still refuses what no rule matches, and a fork head still
 cannot reach an assisted rule — by name or by what it carries.
 
+### Back merges
+
+Two long-lived branches that promote into each other need the same treatment in both directions, and
+writing the pair twice is how the two halves drift apart. `includeReversed: true` applies the rule to the
+back merge as well — the same `(base, head)` with the two swapped:
+
+```yaml
+- base: staging
+  head: develop
+  includeReversed: true
+  strategy: merge
+```
+
+That one rule answers for `staging <- develop` and for `develop <- staging`. Only those two: a pull request
+into `develop` from anywhere else, and one from `staging` into a branch the rule never named, are untouched.
+With a list of heads, every one of them is a base in the reversed direction, so
+`head: [develop, "release/*"]` also covers `develop <- staging` and `release/2026-08 <- staging`.
+
+It composes with `includeTransitive`, which is what a back merge that conflicts needs — the intermediate
+branch is off `develop` with `staging` merged into it, so it carries `staging` rather than naming it:
+
+```yaml
+- base: staging
+  head: develop
+  includeTransitive: true
+  includeReversed: true
+  strategy: merge
+```
+
+Between them the four cases are covered: the promotion, the promotion through an intermediate branch, the
+back merge, and the back merge through one.
+
+A rule with no `head` of its own cannot be reversed. `head` defaults to `**`, and reversing that would
+quietly match every pull request out of the base, which is never what writing one rule for a pair of
+branches meant; the app rejects it rather than guessing.
+
 ### Reference
 
 ```yaml
@@ -376,6 +411,7 @@ rules:
     head: develop # A pattern, or a list of them. Defaults to "**"
     strategy: merge # squash | merge | rebase | forbid
     includeTransitive: false # Also match branches carrying commits from head
+    includeReversed: false # Also apply the rule to the back merge (base and head swapped)
 ```
 
 #### How rules are evaluated
@@ -386,6 +422,9 @@ rules:
 - `head` takes one pattern or a list of them; a rule matches when any of them matches. With
   `includeTransitive: true` it also matches a branch carrying commits from one of them. See
   [Promotions that conflict](#promotions-that-conflict).
+- `includeReversed: true` applies the rule to the back merge as well, so a pair of branches that promote
+  into each other is one rule rather than two. See [Back merges](#back-merges). It needs a `head` of its
+  own — the default `**` cannot be reversed.
 - `head` is matched against the branch name (`head.ref`). While `merge.allowForkHead` is `false`, PRs from
   forks never match a non-`squash` rule, so nobody can get promotion treatment by naming a branch `develop`
   in their fork.

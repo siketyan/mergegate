@@ -30,10 +30,25 @@ export const ruleSchema = v.pipe(
      * however it came by them.
      */
     includeTransitive: v.optional(v.boolean(), false),
+    /**
+     * Apply the rule to the back merge as well: a pull request from `base` into
+     * one of the heads below. Two branches that promote into each other are one
+     * relationship, and writing it twice is how the two halves drift apart.
+     */
+    includeReversed: v.optional(v.boolean(), false),
   }),
   v.check(
-    (rule) => !rule.includeTransitive || rule.head.some(isLiteral),
+    (rule) =>
+      !rule.includeTransitive ||
+      rule.head.some(isLiteral) ||
+      // With includeReversed the base is a head as well, so it can be the
+      // branch whose commits are looked for.
+      (rule.includeReversed && isLiteral(rule.base)),
     "includeTransitive needs a head that names a branch, not only patterns",
+  ),
+  v.check(
+    (rule) => !rule.includeReversed || rule.head.some((pattern) => pattern !== "**"),
+    "includeReversed needs a head of its own: reversing the catch-all would match every pull request out of base",
   ),
 );
 

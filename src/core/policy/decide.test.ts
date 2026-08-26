@@ -42,10 +42,7 @@ version: 1
 rules:
   - base: release
     head: main
-    strategy: merge
-
-  - base: main
-    head: release
+    includeReversed: true
     strategy: merge
 
   - base: release
@@ -231,7 +228,13 @@ test("the matched rule is reported back", () => {
   expect(decision.match).toEqual({
     source: "rule",
     index: 0,
-    rule: { base: "staging", head: ["develop"], strategy: "merge", includeTransitive: false },
+    rule: {
+      base: "staging",
+      head: ["develop"],
+      strategy: "merge",
+      includeTransitive: false,
+      includeReversed: false,
+    },
   });
 });
 
@@ -385,4 +388,136 @@ test("a fork cannot reach an assisted rule by carrying the source branch", () =>
       carriedFrom: new Set(["develop"]),
     }),
   ).toMatchObject({ kind: "manual", strategy: "squash" });
+});
+
+const REVERSED = load(`
+version: 1
+rules:
+  - base: staging
+    head: develop
+    includeReversed: true
+    strategy: merge
+  - base: "**"
+    strategy: squash
+`);
+
+test("one rule covers the promotion and the back merge", () => {
+  // Written in the direction of the promotion, and the branches promote into
+  // each other, so the same rule has to answer for staging -> develop.
+  expect(decide(REVERSED, { base: "staging", head: "develop", isFork: false })).toMatchObject({
+    kind: "assisted",
+    strategy: "merge",
+  });
+  expect(decide(REVERSED, { base: "develop", head: "staging", isFork: false })).toMatchObject({
+    kind: "assisted",
+    strategy: "merge",
+  });
+});
+
+test("the reversed direction is not a way into the rule from anywhere else", () => {
+  // Only base and head swap places: another branch into develop is untouched,
+  // and so is staging into a branch the rule never named.
+  expect(decide(REVERSED, { base: "develop", head: "feature/x", isFork: false })).toMatchObject({
+    kind: "manual",
+    strategy: "squash",
+  });
+  expect(decide(REVERSED, { base: "production", head: "staging", isFork: false })).toMatchObject({
+    kind: "manual",
+    strategy: "squash",
+  });
+});
+
+test("a back merge is not matched without includeReversed", () => {
+  const config = load(`
+version: 1
+rules:
+  - base: staging
+    head: develop
+    strategy: merge
+  - base: "**"
+    strategy: squash
+`);
+  expect(decide(config, { base: "develop", head: "staging", isFork: false })).toMatchObject({
+    kind: "manual",
+    strategy: "squash",
+  });
+});
+
+test("every head is a base in the reversed direction", () => {
+  const config = load(`
+version: 1
+rules:
+  - base: staging
+    head: [develop, "release/*"]
+    includeReversed: true
+    strategy: merge
+  - base: "**"
+    strategy: squash
+`);
+  for (const base of ["develop", "release/2026-08"]) {
+    expect(decide(config, { base, head: "staging", isFork: false })).toMatchObject({
+      kind: "assisted",
+      strategy: "merge",
+    });
+  }
+});
+
+test("a forbidden pair is forbidden both ways", () => {
+  const config = load(`
+version: 1
+rules:
+  - base: production
+    head: develop
+    includeReversed: true
+    strategy: forbid
+  - base: "**"
+    strategy: squash
+`);
+  expect(decide(config, { base: "production", head: "develop", isFork: false })).toMatchObject({
+    kind: "forbidden",
+  });
+  expect(decide(config, { base: "develop", head: "production", isFork: false })).toMatchObject({
+    kind: "forbidden",
+  });
+});
+
+test("a back merge through an intermediate branch reaches the rule too", () => {
+  // Both options together: the back merge conflicted, so it is opened from a
+  // branch off develop with staging merged into it, named nothing in particular.
+  const config = load(`
+version: 1
+rules:
+  - base: staging
+    head: develop
+    includeTransitive: true
+    includeReversed: true
+    strategy: merge
+  - base: "**"
+    strategy: squash
+`);
+  expect(
+    decide(config, {
+      base: "develop",
+      head: "resolve-the-conflicts",
+      isFork: false,
+      carriedFrom: new Set(["staging"]),
+    }),
+  ).toMatchObject({ kind: "assisted", strategy: "merge" });
+
+  // The same branch into develop carrying nothing from staging is a feature.
+  expect(
+    decide(config, {
+      base: "develop",
+      head: "resolve-the-conflicts",
+      isFork: false,
+      carriedFrom: new Set(),
+    }),
+  ).toMatchObject({ kind: "manual", strategy: "squash" });
+});
+
+test("a fork cannot reach an assisted rule through the reversed direction", () => {
+  expect(decide(REVERSED, { base: "develop", head: "staging", isFork: true })).toMatchObject({
+    kind: "manual",
+    strategy: "squash",
+  });
 });

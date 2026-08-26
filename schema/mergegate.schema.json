@@ -139,6 +139,10 @@
           "includeTransitive": {
             "type": "boolean",
             "default": false
+          },
+          "includeReversed": {
+            "type": "boolean",
+            "default": false
           }
         },
         "required": [
