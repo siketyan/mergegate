@@ -56,7 +56,7 @@ export interface PullRequestState {
   readonly mergeable: boolean | null;
   readonly behindBase: boolean;
   readonly reviewDecision: ReviewDecision;
-  /** Every check on the head commit except the one squashables owns. */
+  /** Every check on the head commit except the one mergegate owns. */
   readonly otherChecks: readonly GateCheckConclusion[];
 }
 

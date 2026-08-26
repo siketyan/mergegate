@@ -50,7 +50,7 @@ const WAITING: Record<GateReason, { title: string; summary: string }> = {
   },
   "waiting-checks": {
     title: "Waiting for other checks",
-    summary: "squashables merges once every other check on this commit has succeeded.",
+    summary: "mergegate merges once every other check on this commit has succeeded.",
   },
   "waiting-review": {
     title: "Waiting for review approval",
@@ -58,7 +58,7 @@ const WAITING: Record<GateReason, { title: string; summary: string }> = {
   },
   "changes-requested": {
     title: "Cannot merge: changes requested",
-    summary: "A reviewer requested changes. squashables never merges over a requested change.",
+    summary: "A reviewer requested changes. mergegate never merges over a requested change.",
   },
   "behind-base": {
     title: "Waiting for the branch to be up to date",
@@ -80,7 +80,7 @@ export function renderCheck(state: CheckState): CheckOutput {
         title: "Merge commit required",
         summary: [
           `This pull request must be merged with a ${STRATEGY_LABEL[state.strategy]}, which the merge`,
-          `button cannot do here. Add the \`${state.label}\` label and squashables will merge it for you.`,
+          `button cannot do here. Add the \`${state.label}\` label and mergegate will merge it for you.`,
         ].join(" "),
       };
     case "waiting": {
@@ -90,7 +90,7 @@ export function renderCheck(state: CheckState): CheckOutput {
     case "merged":
       return {
         conclusion: "success",
-        title: "Merged by squashables",
+        title: "Merged by mergegate",
         summary: `Merged with a ${STRATEGY_LABEL[state.strategy]}.`,
       };
     case "merge-failed":
@@ -110,7 +110,7 @@ export function renderCheck(state: CheckState): CheckOutput {
         conclusion: "failure",
         title: `Invalid ${CONFIG_PATH}`,
         summary: [
-          `squashables could not read \`${CONFIG_PATH}\` from the default branch, so it cannot decide`,
+          `mergegate could not read \`${CONFIG_PATH}\` from the default branch, so it cannot decide`,
           "how this pull request may be merged:",
           "",
           ...state.errors.map((error) => `- ${error}`),

@@ -124,4 +124,4 @@ export function createTestContext(
   };
 }
 
-export const repo: RepoRef = { owner: "siketyan", repo: "squashables" };
+export const repo: RepoRef = { owner: "siketyan", repo: "mergegate" };

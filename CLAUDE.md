@@ -4,7 +4,7 @@ Guidance for Claude Code when working in this repository.
 
 ## What this project is
 
-**squashables** is a GitHub App that enforces the merge strategy per pull request in repositories with
+**mergegate** is a GitHub App that enforces the merge strategy per pull request in repositories with
 several long-lived branches. It looks up a rule from the PR's `(base, head)` pair, fails the check run for
 PRs that must not be squashed — which blocks the merge through a ruleset — and merges PRs that need a merge
 commit itself once the `ready-to-merge` label is added.
@@ -55,7 +55,7 @@ $ wrangler deploy     # Deploy
 ```
 src/
   core/                    # Runtime-agnostic. Web standard APIs only
-    config/                # Parsing and validation of .github/squashables.yml
+    config/                # Parsing and validation of .github/mergegate.yml
     policy/                # (base, head, config) -> Decision, pure functions. The heart of the app
     check/                 # Building check run output (title / summary)
     handlers/              # Per-event webhook handling, talking to GitHub through ports

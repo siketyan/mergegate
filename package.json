@@ -1,12 +1,12 @@
 {
-  "name": "squashables",
+  "name": "mergegate",
   "version": "0.0.0",
   "private": true,
   "description": "A GitHub App that enforces the merge strategy per pull request",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/siketyan/squashables.git"
+    "url": "git+https://github.com/siketyan/mergegate.git"
   },
   "type": "module",
   "scripts": {

@@ -42,7 +42,7 @@ async function sign(secret: string, body: string): Promise<string> {
 }
 
 function deliveryRequest(body: string, signature: string, event = "pull_request"): Request {
-  return new Request("https://squashables.example/webhooks/github", {
+  return new Request("https://mergegate.example/webhooks/github", {
     method: "POST",
     headers: {
       "x-github-event": event,
@@ -58,7 +58,7 @@ function delivery(): string {
   return JSON.stringify({
     action: "opened",
     installation: { id: 42 },
-    repository: { name: "squashables", owner: { login: "siketyan" } },
+    repository: { name: "mergegate", owner: { login: "siketyan" } },
     pull_request: { number: 12 },
   });
 }
@@ -105,6 +105,6 @@ test("health checks and unknown routes do not need a signature", async () => {
   const { context } = createTestContext(api);
   const handle = createWebhookHandler(context);
 
-  expect((await handle(new Request("https://squashables.example/health"))).status).toBe(200);
-  expect((await handle(new Request("https://squashables.example/"))).status).toBe(404);
+  expect((await handle(new Request("https://mergegate.example/health"))).status).toBe(200);
+  expect((await handle(new Request("https://mergegate.example/"))).status).toBe(404);
 });

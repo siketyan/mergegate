@@ -24,7 +24,7 @@ export const configSchema = v.strictObject({
   ),
   check: v.optional(
     v.strictObject({
-      name: v.optional(v.pipe(v.string(), v.minLength(1)), "squashables"),
+      name: v.optional(v.pipe(v.string(), v.minLength(1)), "mergegate"),
     }),
     {},
   ),
@@ -53,7 +53,7 @@ export type Config = v.InferOutput<typeof configSchema>;
 export type MergeSettings = Config["merge"];
 
 /** The check run name used before the configuration could be read. */
-export const FALLBACK_CHECK_NAME = "squashables";
+export const FALLBACK_CHECK_NAME = "mergegate";
 
 /** Where the configuration is read from, on the default branch. */
-export const CONFIG_PATH = ".github/squashables.yml";
+export const CONFIG_PATH = ".github/mergegate.yml";

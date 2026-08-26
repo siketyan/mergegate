@@ -40,7 +40,7 @@ test("a squash pull request only gets a passing check", async () => {
   const state = await run({}, { base: "develop", head: "feature/login" });
   expect(state.checkRuns).toHaveLength(1);
   expect(state.checkRuns[0]).toMatchObject({
-    name: "squashables",
+    name: "mergegate",
     headSha: "c0ffee",
     conclusion: "success",
     title: "Squash merge",
@@ -72,7 +72,7 @@ test("a labelled pull request is merged with the evaluated head SHA", async () =
   ]);
   expect(state.checkRuns.at(-1)).toMatchObject({
     conclusion: "success",
-    title: "Merged by squashables",
+    title: "Merged by mergegate",
   });
 });
 
@@ -112,10 +112,10 @@ test("a forbidden pair fails permanently", async () => {
 
 test("an unreadable configuration fails closed under the default check name", async () => {
   const state = await run({ configSource: "version: 1\nrules: [\n" });
-  expect(state.ownCheckNames).toEqual(["squashables"]);
+  expect(state.ownCheckNames).toEqual(["mergegate"]);
   expect(state.checkRuns[0]).toMatchObject({
     conclusion: "failure",
-    title: "Invalid .github/squashables.yml",
+    title: "Invalid .github/mergegate.yml",
   });
 });
 
