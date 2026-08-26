@@ -1,0 +1,32 @@
+# yaml-language-server: $schema=https://mergegate.s6n.workers.dev/mergegate.schema.json
+#
+# mergegate's own configuration. `main` is where the work happens; `release` is
+# what is deployed, and gets there by promotion rather than by anyone pushing
+# to it.
+version: 1
+
+rules:
+  # release-please's pull request is one generated commit — the version bump
+  # and the changelog — so it squashes like any other single change.
+  - base: release
+    head: "release-please--branches--release*"
+    strategy: squash
+
+  # The promotion, and the back merge that returns the release commits to main.
+  # Squashing either would break the shared ancestry and make every later
+  # promotion conflict. includeTransitive catches a promotion that had to go
+  # through a branch where the conflicts were resolved.
+  - base: release
+    head: main
+    includeTransitive: true
+    includeReversed: true
+    strategy: merge
+
+  # Nothing else reaches release: a change belongs on main first.
+  - base: release
+    strategy: forbid
+
+  # Everything into main is squashed, which is what this repository already did
+  # before it had a configuration file.
+  - base: "**"
+    strategy: squash

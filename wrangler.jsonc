@@ -25,4 +25,21 @@
   "vars": {
     "LOG_LEVEL": "info",
   },
+  // The top-level configuration is production, deployed from `release`. `main`
+  // deploys to the canary Worker with `wrangler deploy --env canary`: the same
+  // code against a separate GitHub App, so a delivery that goes wrong there
+  // goes wrong on a repository nobody is waiting on.
+  //
+  // `vars` and secrets are per environment, so canary needs its own
+  // GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY and GITHUB_WEBHOOK_SECRET
+  // (`wrangler secret put GITHUB_APP_ID --env canary`).
+  "env": {
+    "canary": {
+      "name": "mergegate-canary",
+      "vars": {
+        // Canary is where the logs get read.
+        "LOG_LEVEL": "debug",
+      },
+    },
+  },
 }
