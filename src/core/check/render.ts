@@ -32,12 +32,28 @@ export type CheckState =
       readonly kind: "awaiting-label";
       readonly strategy: Strategy;
       readonly label: string;
-      /** Whether `merge.allowCheckAction` lets the button stand in for the label. */
+      /** Whether `merge.allowCheckAction` lets the button merge without a label. */
       readonly offerMerge: boolean;
     }
-  | { readonly kind: "waiting"; readonly reason: GateReason; readonly label: string }
+  | {
+      readonly kind: "waiting";
+      readonly reason: GateReason;
+      readonly label: string;
+      readonly strategy: Strategy;
+      /**
+       * Whether the label is on. Only then does mergegate come back by itself;
+       * a merge asked for with the button happens once and is not remembered.
+       */
+      readonly armed: boolean;
+      readonly offerMerge: boolean;
+    }
   | { readonly kind: "merged"; readonly strategy: Strategy }
-  | { readonly kind: "merge-failed"; readonly message: string }
+  | {
+      readonly kind: "merge-failed";
+      readonly message: string;
+      readonly strategy: Strategy;
+      readonly offerMerge: boolean;
+    }
   | { readonly kind: "forbidden"; readonly base: string; readonly head: string }
   | { readonly kind: "invalid-config"; readonly errors: readonly string[] };
 
@@ -60,6 +76,10 @@ function mergeAction(strategy: Strategy): CheckAction {
   };
 }
 
+/**
+ * What is in the way, without saying what happens next: that depends on whether
+ * the label is on, which is what `nextStep` answers.
+ */
 const WAITING: Record<GateReason, { title: string; summary: string }> = {
   draft: {
     title: "Waiting for the pull request to be ready",
@@ -67,17 +87,15 @@ const WAITING: Record<GateReason, { title: string; summary: string }> = {
   },
   "mergeability-unknown": {
     title: "Waiting for GitHub to compute mergeability",
-    summary:
-      "GitHub has not finished computing whether this branch merges cleanly. Retrying shortly.",
+    summary: "GitHub has not finished computing whether this branch merges cleanly.",
   },
   conflict: {
     title: "Cannot merge: conflicts with base",
-    summary:
-      "This branch conflicts with its base branch. Resolve the conflicts and add the label again.",
+    summary: "This branch conflicts with its base branch. Resolve the conflicts to continue.",
   },
   "waiting-checks": {
     title: "Waiting for other checks",
-    summary: "mergegate merges once every other check on this commit has succeeded.",
+    summary: "Every other check on this commit has to succeed first.",
   },
   "waiting-review": {
     title: "Waiting for review approval",
@@ -89,9 +107,22 @@ const WAITING: Record<GateReason, { title: string; summary: string }> = {
   },
   "behind-base": {
     title: "Waiting for the branch to be up to date",
-    summary: "Update this branch from its base, then add the label again.",
+    summary: "Update this branch from its base to continue.",
   },
 };
+
+/**
+ * The label is a standing instruction, so mergegate comes back to a labelled
+ * pull request on its own. A press of the button is a one-off, and saying so is
+ * the difference between an honest check run and a promise nobody keeps.
+ */
+function nextStep(state: { label: string; armed: boolean; offerMerge: boolean }): string {
+  if (state.armed) {
+    return `mergegate merges as soon as that clears, while the \`${state.label}\` label is on.`;
+  }
+  const label = `Add the \`${state.label}\` label to have mergegate merge as soon as that clears`;
+  return state.offerMerge ? `${label}, or press **Merge now** again yourself.` : `${label}.`;
+}
 
 export function renderCheck(state: CheckState): CheckOutput {
   switch (state.kind) {
@@ -118,12 +149,11 @@ export function renderCheck(state: CheckState): CheckOutput {
       };
     case "waiting": {
       const waiting = WAITING[state.reason];
-      // The merge is already armed here, so there is nothing left to press.
       return {
         conclusion: "action_required",
         title: waiting.title,
-        summary: waiting.summary,
-        actions: [],
+        summary: `${waiting.summary} ${nextStep(state)}`,
+        actions: state.offerMerge ? [mergeAction(state.strategy)] : [],
       };
     }
     case "merged":
@@ -138,7 +168,7 @@ export function renderCheck(state: CheckState): CheckOutput {
         conclusion: "action_required",
         title: "Cannot merge",
         summary: state.message,
-        actions: [],
+        actions: state.offerMerge ? [mergeAction(state.strategy)] : [],
       };
     case "forbidden":
       return {

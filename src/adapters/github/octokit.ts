@@ -182,15 +182,6 @@ class OctokitGitHubApi implements GitHubApi {
     }
   }
 
-  async addLabel(repo: RepoRef, pullNumber: number, label: string): Promise<void> {
-    await this.#octokit.rest.issues.addLabels({
-      owner: repo.owner,
-      repo: repo.repo,
-      issue_number: pullNumber,
-      labels: [label],
-    });
-  }
-
   async removeLabel(repo: RepoRef, pullNumber: number, label: string): Promise<void> {
     try {
       await this.#octokit.rest.issues.removeLabel({

@@ -50,14 +50,21 @@ test("a button stays inside the sizes GitHub accepts", () => {
   }
 });
 
-test("no other state offers a button", () => {
-  // Once the merge is armed there is nothing left for a human to press, and a
-  // check run is only ever updated with the whole list.
+test("no state offers a button once mergegate is going to act on its own", () => {
+  // A labelled pull request needs no button, and neither does a settled one. A
+  // check run is only ever updated with the whole list, so this clears them.
   const states = [
     { kind: "manual", strategy: "squash" },
-    { kind: "waiting", reason: "waiting-checks", label: "ready-to-merge" },
+    {
+      kind: "waiting",
+      reason: "waiting-checks",
+      label: "ready-to-merge",
+      strategy: "merge",
+      armed: true,
+      offerMerge: false,
+    },
     { kind: "merged", strategy: "merge" },
-    { kind: "merge-failed", message: "Merge conflict" },
+    { kind: "merge-failed", message: "Merge conflict", strategy: "merge", offerMerge: false },
     { kind: "forbidden", base: "production", head: "develop" },
     { kind: "invalid-config", errors: ["version: expected 1"] },
   ] as const;
@@ -65,6 +72,17 @@ test("no other state offers a button", () => {
   for (const state of states) {
     expect(renderCheck(state).actions).toEqual([]);
   }
+});
+
+test("a merge that failed with no label behind it keeps a way to retry", () => {
+  const output = renderCheck({
+    kind: "merge-failed",
+    message: "Merge conflict",
+    strategy: "merge",
+    offerMerge: true,
+  });
+  expect(output.title).toBe("Cannot merge");
+  expect(output.actions).toHaveLength(1);
 });
 
 test("every gate reason blocks the merge", () => {
@@ -79,10 +97,48 @@ test("every gate reason blocks the merge", () => {
   ] as const;
 
   for (const [reason, title] of reasons) {
-    const output = renderCheck({ kind: "waiting", reason, label: "ready-to-merge" });
+    const output = renderCheck({
+      kind: "waiting",
+      reason,
+      label: "ready-to-merge",
+      strategy: "merge",
+      armed: true,
+      offerMerge: false,
+    });
     expect(output.conclusion).toBe("action_required");
     expect(output.title).toBe(title);
+    // Only a labelled pull request is one mergegate comes back to.
+    expect(output.summary).toContain("mergegate merges as soon as that clears");
   }
+});
+
+test("a wait nobody armed promises nothing and keeps the button", () => {
+  const output = renderCheck({
+    kind: "waiting",
+    reason: "waiting-checks",
+    label: "ready-to-merge",
+    strategy: "merge",
+    armed: false,
+    offerMerge: true,
+  });
+  expect(output.summary).not.toContain("mergegate merges as soon as that clears");
+  expect(output.summary).toContain("Add the `ready-to-merge` label");
+  expect(output.summary).toContain("press **Merge now** again");
+  expect(output.actions).toHaveLength(1);
+});
+
+test("a wait nobody armed still points at the label when the button is off", () => {
+  const output = renderCheck({
+    kind: "waiting",
+    reason: "waiting-checks",
+    label: "ready-to-merge",
+    strategy: "merge",
+    armed: false,
+    offerMerge: false,
+  });
+  expect(output.summary).toContain("Add the `ready-to-merge` label");
+  expect(output.summary).not.toContain("Merge now");
+  expect(output.actions).toEqual([]);
 });
 
 test("a merged pull request ends green so the history carries no red X", () => {

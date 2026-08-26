@@ -112,7 +112,6 @@ export interface GitHubApi {
   /** `check_suite.pull_requests` is empty for forks, so this is the fallback. */
   findPullRequestsForSha(repo: RepoRef, sha: string): Promise<readonly number[]>;
   mergePullRequest(repo: RepoRef, pullNumber: number, input: MergeInput): Promise<MergeOutcome>;
-  addLabel(repo: RepoRef, pullNumber: number, label: string): Promise<void>;
   removeLabel(repo: RepoRef, pullNumber: number, label: string): Promise<void>;
   /**
    * Whether a user may push to the repository. Pressing a button in the Checks

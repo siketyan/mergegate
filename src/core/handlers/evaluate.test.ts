@@ -201,29 +201,38 @@ test("a press of the button merges without the label", async () => {
       },
     },
   ]);
-  // Nothing to arm: the merge happened on the press itself.
-  expect(state.addedLabels).toEqual([]);
   expect(state.checkRuns.at(-1)).toMatchObject({
     conclusion: "success",
     title: "Merged by mergegate",
   });
 });
 
-test("a press that cannot merge yet arms the merge like the label would", async () => {
+test("a press that cannot merge yet says so and keeps the button", async () => {
   const state = await run({}, { otherChecks: ["pending"] }, PRESSED);
   expect(state.merges).toHaveLength(0);
-  expect(state.addedLabels).toEqual([{ pullNumber: 12, label: "ready-to-merge" }]);
-  expect(state.checkRuns.at(-1)).toMatchObject({
+  const check = state.checkRuns.at(-1);
+  expect(check).toMatchObject({
     conclusion: "action_required",
     title: "Waiting for other checks",
   });
+  // The press left nothing behind, so the check must not promise a merge.
+  expect(check?.summary).toContain("Add the `ready-to-merge` label");
+  expect(check?.summary).toContain("Merge now");
+  expect(check?.actions).toHaveLength(1);
+});
+
+test("a labelled pull request that is not ready is the one mergegate comes back to", async () => {
+  const state = await run({}, { labels: ["ready-to-merge"], otherChecks: ["pending"] });
+  const check = state.checkRuns.at(-1);
+  expect(check?.summary).toContain("mergegate merges as soon as that clears");
+  // Nothing to press: the label already is the standing instruction.
+  expect(check?.actions).toEqual([]);
 });
 
 test("a press from someone who cannot push is refused", async () => {
   const state = await run({ pushers: [] }, {}, PRESSED);
   expect(state.permissionQueries).toEqual(["maintainer"]);
   expect(state.merges).toHaveLength(0);
-  expect(state.addedLabels).toHaveLength(0);
   expect(state.checkRuns[0]).toMatchObject({ title: "Merge commit required" });
 });
 
@@ -261,14 +270,19 @@ test("allowCheckAction: false takes the button away and stops honouring it", asy
   expect(state.merges).toHaveLength(0);
 });
 
-test("a press that hits a permanent failure has no label to drop", async () => {
+test("a press that hits a permanent failure has no label to drop, so it keeps the button", async () => {
   const state = await run(
     { mergeOutcome: { ok: false, kind: "conflict", message: "Merge conflict" } },
     {},
     PRESSED,
   );
   expect(state.removedLabels).toEqual([]);
-  expect(state.checkRuns.at(-1)).toMatchObject({ title: "Cannot merge" });
+  expect(state.checkRuns.at(-1)).toMatchObject({
+    title: "Cannot merge",
+    actions: [
+      { label: "Merge now", description: "Merge with a merge commit", identifier: "merge" },
+    ],
+  });
 });
 
 test("the label wins over the button, so the permission is never looked up", async () => {

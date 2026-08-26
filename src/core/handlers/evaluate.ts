@@ -86,6 +86,10 @@ async function runAssistedMerge(
   await report(api, repo, checkName, pullRequest.headSha, {
     kind: "merge-failed",
     message: outcome.message,
+    strategy,
+    // Nothing brings mergegate back to an unlabelled pull request, so the way
+    // to retry has to stay on the check run itself.
+    offerMerge: config.merge.allowCheckAction && !labelled,
   });
 
   // A transient failure is retried by the next event; a permanent one drops the
@@ -148,10 +152,10 @@ export interface EvaluateOptions {
 }
 
 /**
- * Whether a press of the button may stand in for the label. The app bypasses
- * the ruleset, so this is the only thing between a button in a browser and a
- * merge: the feature has to be enabled, the button has to belong to the commit
- * being evaluated, and whoever pressed it has to be able to push.
+ * Whether a press of the button is honoured. The app bypasses the ruleset, so
+ * this is the only thing between a button in a browser and a merge: the feature
+ * has to be enabled, the button has to belong to the commit being evaluated,
+ * and whoever pressed it has to be able to push.
  */
 async function acceptMergeRequest(
   context: AppContext,
@@ -189,6 +193,7 @@ async function acceptMergeRequest(
     pull: pullRequest.number,
     actor: request.actor,
   });
+
   return true;
 }
 
@@ -264,16 +269,16 @@ export async function evaluatePullRequest(
 
       const gate = evaluateGate(pullRequest, config.merge);
       if (!gate.ready) {
-        // The button is the label by another name, so a press that cannot merge
-        // yet arms the merge exactly as the label would and the next event
-        // picks it up.
-        if (requested) {
-          await api.addLabel(repo, pullRequest.number, config.merge.label);
-        }
+        // A press merges or it does not; it leaves nothing behind that would
+        // make mergegate come back. Only the label does that, so an unlabelled
+        // pull request keeps the button and is told as much.
         await report(api, repo, checkName, pullRequest.headSha, {
           kind: "waiting",
           reason: gate.reason,
           label: config.merge.label,
+          strategy: decision.strategy,
+          armed: labelled,
+          offerMerge: config.merge.allowCheckAction && !labelled,
         });
         return;
       }

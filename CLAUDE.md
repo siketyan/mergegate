@@ -105,8 +105,9 @@ These map directly onto promises the README makes to users. Do not break them.
    evaluated. On 409, abort and re-evaluate — unreviewed commits must never be merged.
 6. **The label is not a sufficient condition.** Re-verify mergeability, other checks and `reviewDecision`
    before every assisted merge; the app bypasses the ruleset, so GitHub's own gates do not apply.
-   The `Merge now` check run action is the label by another name: same gates, plus a write-access check on
-   whoever pressed it and a head SHA that still matches the check run the button was on.
+   The `Merge now` check run action goes through the same gates, plus a write-access check on whoever
+   pressed it and a head SHA that still matches the check run the button was on. It merges or it reports
+   why it cannot; it never writes a label, because the label is the user's instruction, not the app's.
 7. **Never process a request that fails signature verification.** Compare in constant time.
 8. **Respond 202 immediately and continue the work through the `Deferrer` port**, to stay inside GitHub's
    10-second webhook timeout.

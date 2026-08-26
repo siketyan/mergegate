@@ -15,7 +15,6 @@ export interface FakeGitHubState {
   pullRequests: Map<number, PullRequestState>;
   checkRuns: CheckRunInput[];
   merges: { pullNumber: number; input: MergeInput }[];
-  addedLabels: { pullNumber: number; label: string }[];
   removedLabels: { pullNumber: number; label: string }[];
   deletedBranches: string[];
   /** Sources whose commits the pull request head is deemed to carry. */
@@ -57,7 +56,6 @@ export function createFakeGitHub(initial: Partial<FakeGitHubState> = {}): {
     pullRequests: new Map(),
     checkRuns: [],
     merges: [],
-    addedLabels: [],
     removedLabels: [],
     deletedBranches: [],
     carriedFrom: [],
@@ -86,9 +84,6 @@ export function createFakeGitHub(initial: Partial<FakeGitHubState> = {}): {
     mergePullRequest: async (_repo, pullNumber, input) => {
       state.merges.push({ pullNumber, input });
       return state.mergeOutcome;
-    },
-    addLabel: async (_repo, pullNumber, label) => {
-      state.addedLabels.push({ pullNumber, label });
     },
     removeLabel: async (_repo, pullNumber, label) => {
       state.removedLabels.push({ pullNumber, label });

@@ -95,7 +95,8 @@ flowchart TD
     E --> G{"ready-to-merge label added<br/>or Merge now pressed"}
     G -->|"yes"| H{"CI, review and<br/>conflict checks"}
     H -->|"pass"| I["App merges with a merge commit<br/>Check: success"]
-    H -->|"fail"| E
+    H -->|"fail"| J["Check: action_required<br/>says what is in the way"]
+    J -->|"labelled: retried on the next event"| H
 ```
 
 Two ideas carry the whole design.
@@ -138,10 +139,21 @@ Labelling a PR while CI is still running is fine. The app re-evaluates on `check
 ### Merge now
 
 The `mergegate` check carries a **Merge now** button in the Checks tab, so a promotion never has to leave
-that screen. It is the label by another name and clears exactly the same gates: mergegate merges straight
-away when everything holds, and otherwise adds the `ready-to-merge` label so the merge happens as soon as
-it does. See [Merging from the Checks tab](#merging-from-the-checks-tab) for what the button itself has to
-satisfy, and set `merge.allowCheckAction: false` to take it away and leave the label as the only trigger.
+that screen. It merges then and there, through exactly the gates the label goes through, and **never adds
+or removes a label of its own** — the label stays something you set, not something the app writes.
+
+The two triggers therefore differ in one way, and the check run says which one you have:
+
+|                                              | `ready-to-merge` label                    | **Merge now**             |
+| -------------------------------------------- | ----------------------------------------- | ------------------------- |
+| Merges when everything holds                 | Yes                                       | Yes                       |
+| Still merges later, once CI or review clears | Yes — the label is a standing instruction | No — a press happens once |
+
+So a press that cannot merge yet reports what is in the way and keeps the button, rather than promising a
+merge nobody armed. Add the label instead if you want mergegate to come back on its own.
+
+See [Merging from the Checks tab](#merging-from-the-checks-tab) for what the button itself has to satisfy,
+and set `merge.allowCheckAction: false` to take it away and leave the label as the only trigger.
 
 ### Re-run
 
@@ -403,14 +415,14 @@ merge commit and rebase are not even offered.
 
 1. Open the PR. The `mergegate` check reports **Action required** and the merge button is disabled.
 2. The check details explain that this PR will be merged with a merge commit once you add the
-   `ready-to-merge` label, and carry a **Merge now** button that does the same.
-3. When review and CI are done, add the `ready-to-merge` label — or press **Merge now** on the check in
-   the Checks tab, which does the same thing without leaving that screen.
-4. mergegate merges it with a merge commit. If CI is still running when you ask for it, the app waits and
+   `ready-to-merge` label, and carry a **Merge now** button for merging it on the spot.
+3. Add the `ready-to-merge` label. If CI is still running, that is fine: the label stands, and mergegate
    merges once CI finishes.
+4. Or, once everything is already green, press **Merge now** on the check in the Checks tab and it merges
+   straight away without leaving that screen.
 
-**Changed your mind?** Remove the label. As long as the merge has not started, it is cancelled. A press of
-**Merge now** that could not merge yet leaves the label behind for exactly that reason.
+**Changed your mind?** Remove the label. As long as the merge has not started, it is cancelled. There is
+nothing to cancel after a press of **Merge now**: it either merged or it told you why it could not.
 
 ### A forbidden branch pair
 
@@ -438,9 +450,13 @@ right base branch — changing the base triggers a fresh evaluation — or close
 | Broken configuration                               | `failure`         | `Invalid .github/mergegate.yml`                         |
 
 The first row's title names whichever strategy `merge.manual` lists, so a repository whose humans merge with
-merge commits sees `Merge commit` there instead. The `Merge commit required` row carries the **Merge now**
-button unless `merge.allowCheckAction` is off; no other state does, because from there on mergegate is
-already going to merge and there is nothing left to press.
+merge commits sees `Merge commit` there instead.
+
+The `Labelled` rows read the same way for a pull request whose merge was asked for with **Merge now**, with
+one difference the summary spells out: a labelled pull request is one mergegate comes back to, an unlabelled
+one is not. So the **Merge now** button stays on every state where nothing is going to happen by itself —
+`Merge commit required`, an unlabelled wait, and an unlabelled `Cannot merge` — and is absent everywhere
+mergegate is already going to act, or where `merge.allowCheckAction` is off.
 
 Both `action_required` and `failure` count as failing for a required status check, so either blocks the
 merge. The check is flipped to `success` after an assisted merge so that merged PRs do not carry a red X in
@@ -480,9 +496,9 @@ returns 409, and mergegate aborts and re-evaluates — an unreviewed commit neve
   of its own. The press also names a commit rather than a pull request, so on the rare commit that heads
   two open PRs nothing is merged — use the label there.
 
-A press that clears all of it merges immediately, and no label is ever added. A press that cannot merge yet
-adds the `ready-to-merge` label instead, so the merge happens on the next event that unblocks it — the
-button and the label converge on the same state either way.
+A press that clears all of it merges immediately. A press that does not writes the reason into the check and
+stops there, leaving the button for when the reason is gone — it never adds the label on your behalf, so
+nothing about the pull request changes behind your back.
 
 ### When it fails
 
@@ -490,8 +506,8 @@ button and the label converge on the same state either way.
   the next event.
 - **Permanent failures** (conflict, missing permission, merge method disabled in repository settings) are
   written into the check, and with `merge.removeLabelOnFailure: true` the label is dropped. Fix the cause and
-  re-add the label to retry. A merge armed from the Checks tab has no label to drop, so **Re-run** the check
-  to get the button back.
+  re-add the label to retry. A merge asked for with **Merge now** had no label in the first place, so the
+  check keeps the button instead.
 
 ---
 
@@ -499,12 +515,12 @@ button and the label converge on the same state either way.
 
 ### Repository permissions
 
-| Permission    | Level        | Used for                                          |
-| ------------- | ------------ | ------------------------------------------------- |
-| Metadata      | Read         | Mandatory. Also the permission behind `Merge now` |
-| Checks        | Read & write | Creating and updating check runs                  |
-| Contents      | Read & write | Reading the config file, merging                  |
-| Pull requests | Read & write | Reading PRs, merging, label handling              |
+| Permission    | Level        | Used for                                            |
+| ------------- | ------------ | --------------------------------------------------- |
+| Metadata      | Read         | Mandatory. Also the permission behind `Merge now`   |
+| Checks        | Read & write | Creating and updating check runs                    |
+| Contents      | Read & write | Reading the config file, merging                    |
+| Pull requests | Read & write | Reading PRs, merging, dropping the label on failure |
 
 ### Webhook events
 
@@ -525,8 +541,9 @@ sends the first two to apps with **Checks: read & write** — which the table ab
   dropped, so it cannot loop. The **Re-run** and **Merge now** presses are the opposite case: GitHub sends
   those only to the app that owns the check run, so they are acted on precisely when the check run is ours.
 - **Merging from the Checks tab requires write access**, checked against GitHub's permission API before the
-  press is honoured, and the press is tied to the commit it was rendered on. `merge.allowCheckAction: false`
-  removes the button and stops the app from honouring it at all.
+  press is honoured, and the press is tied to the commit it was rendered on. It merges or it does not: the
+  app never writes a label to stand in for you. `merge.allowCheckAction: false` removes the button and stops
+  the app from honouring it at all.
 - **Bypass is kept narrow.** "For pull requests only" is the recommended mode. Bypassing is the price of this
   design, which is exactly why the app re-verifies CI and review itself.
 - **No state is owned by the app.** Everything needed for a decision comes from the GitHub API. The only
