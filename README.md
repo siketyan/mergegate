@@ -30,6 +30,11 @@ ready, add the `ready-to-merge` label and **the app merges it for you** with the
 
 ## The problem
 
+<img src="docs/branching.svg" alt="A branch graph: feature/login is squashed into develop as a single commit, develop is merged into release with a merge commit, and release is merged back into develop" width="920">
+
+Solid arrows are merge commits — the branches keep a shared ancestry. Dashed arrows are squash merges: the
+content moves over as one new commit and the source branch's history ends there.
+
 ### What we want
 
 In a repository with several long-lived branches — `develop` / `staging` / `production`, or `main` / `release` —
