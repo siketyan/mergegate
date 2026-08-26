@@ -14,6 +14,7 @@ import type {
   PullRequestState,
   RepoRef,
 } from "../../core/ports.ts";
+import { decodeContent } from "./content.ts";
 import type { PullRequestStateQuery } from "./generated/graphql.ts";
 import { pullRequestQuery, toPullRequestState } from "./graphql.ts";
 
@@ -33,11 +34,6 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function decodeBase64(content: string): string {
-  const binary = atob(content.replaceAll("\n", ""));
-  return new TextDecoder().decode(Uint8Array.from(binary, (character) => character.charCodeAt(0)));
-}
-
 class OctokitGitHubApi implements GitHubApi {
   readonly #octokit: AppOctokitInstance;
   readonly #appId: number;
@@ -49,21 +45,15 @@ class OctokitGitHubApi implements GitHubApi {
 
   async readDefaultBranchFile(repo: RepoRef, path: string): Promise<string | null> {
     try {
-      // No `ref`, so GitHub serves the default branch.
+      // No `ref`, so GitHub serves the default branch. The raw media type asks
+      // for the file itself rather than a base64 envelope.
       const { data } = await this.#octokit.rest.repos.getContent({
         owner: repo.owner,
         repo: repo.repo,
         path,
+        mediaType: { format: "raw" },
       });
-      if (Array.isArray(data) || data.type !== "file") {
-        return null;
-      }
-      if (data.encoding !== "base64") {
-        // Too large to be inlined. Refusing beats guessing: the caller fails the
-        // check rather than treating the repository as unconfigured.
-        throw new Error(`${path} was returned with encoding ${data.encoding}`);
-      }
-      return decodeBase64(data.content);
+      return decodeContent(path, data);
     } catch (error) {
       if (statusOf(error) === 404) {
         return null;

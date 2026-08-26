@@ -46,13 +46,28 @@ export default {
     workerEnv: WorkerEnv,
     executionContext: ExecutionContextLike,
   ): Promise<Response> {
-    const env = readEnv({
-      GITHUB_APP_ID: workerEnv.GITHUB_APP_ID,
-      GITHUB_APP_PRIVATE_KEY: workerEnv.GITHUB_APP_PRIVATE_KEY,
-      GITHUB_WEBHOOK_SECRET: workerEnv.GITHUB_WEBHOOK_SECRET,
-      LOG_LEVEL: workerEnv.LOG_LEVEL,
-      CONFIG_CACHE_TTL: workerEnv.CONFIG_CACHE_TTL,
-    });
+    let env;
+    try {
+      env = readEnv({
+        GITHUB_APP_ID: workerEnv.GITHUB_APP_ID,
+        GITHUB_APP_PRIVATE_KEY: workerEnv.GITHUB_APP_PRIVATE_KEY,
+        GITHUB_WEBHOOK_SECRET: workerEnv.GITHUB_WEBHOOK_SECRET,
+        LOG_LEVEL: workerEnv.LOG_LEVEL,
+        CONFIG_CACHE_TTL: workerEnv.CONFIG_CACHE_TTL,
+      });
+    } catch (error) {
+      // A misconfigured Worker should say so rather than throw a stack trace at
+      // GitHub. None of these messages carry key material.
+      const message = error instanceof Error ? error.message : String(error);
+      console.log(
+        JSON.stringify({ level: "error", message: "configuration rejected", reason: message }),
+      );
+      return new Response(JSON.stringify({ error: message }), {
+        status: 500,
+        headers: { "content-type": "application/json" },
+      });
+    }
+
     const logger = createLogger(env.logLevel);
 
     const context: AppContext = {

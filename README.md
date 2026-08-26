@@ -433,7 +433,9 @@ $ wrangler secret put GITHUB_WEBHOOK_SECRET
 $ wrangler deploy
 ```
 
-The webhook URL is `https://<your-worker>/webhooks/github`. Health check: `GET /health`.
+The webhook URL is `https://<your-worker>/webhooks/github`. Health check: `GET /health`, which also
+validates the secrets: a 500 there names what is wrong with them (a PKCS#1 key, a mangled PEM, an app
+slug where the numeric id belongs) instead of failing later on the first API call.
 
 > [!IMPORTANT]
 > GitHub hands you a PKCS#1 private key, but WebCrypto wants PKCS#8. Convert it first:
