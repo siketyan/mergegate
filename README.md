@@ -200,6 +200,10 @@ reaches a check run. Point at it from the top of the file:
 version: 1
 ```
 
+Every deployment serves the same file at `https://<your-worker>/mergegate.schema.json`. Prefer that URL when
+you self-host: it is the schema the app you are actually talking to validates with, while the one above
+tracks whatever is on `main`.
+
 It is generated from the same schema the app validates with, so the two cannot drift apart. The one rule it
 cannot express is that `includeTransitive` needs a head that names a branch rather than only a pattern; the
 app checks that and reports it in the check run.
@@ -513,6 +517,10 @@ $ wrangler deploy
 The webhook URL is `https://<your-worker>/webhooks/github`. Health check: `GET /health`, which also
 validates the secrets: a 500 there names what is wrong with them (a PKCS#1 key, a mangled PEM, an app
 slug where the numeric id belongs) instead of failing later on the first API call.
+
+`GET /mergegate.schema.json` serves the configuration schema, as a Workers static asset rather than from the
+Worker itself: matching requests never reach the script, so it costs no invocations and cannot slow a
+delivery down.
 
 > [!IMPORTANT]
 > GitHub hands you a PKCS#1 private key, but WebCrypto wants PKCS#8. Convert it first:
