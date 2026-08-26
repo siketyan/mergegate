@@ -1,0 +1,35 @@
+name: Release
+
+# `release` is the production branch: what is on it is what is deployed. Every
+# promotion from main lands here, and release-please keeps a pull request open
+# with the version bump and the changelog those commits add up to. Merging that
+# pull request tags the release.
+on:
+  push:
+    branches: [release]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-please
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      # The release pull request is opened with GITHUB_TOKEN, so GitHub does not
+      # run workflows on it — `CI / check` will not report there. mergegate is a
+      # GitHub App rather than a workflow, so its own check is unaffected.
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          target-branch: release
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
