@@ -17,7 +17,7 @@ const branchPatterns = v.pipe(
 export const strategySchema = v.picklist(["squash", "merge", "rebase"]);
 
 /** What a rule may ask for, including refusing the pull request outright. */
-export const ruleStrategySchema = v.picklist(["squash", "merge", "rebase", "forbid"]);
+const ruleStrategySchema = v.picklist(["squash", "merge", "rebase", "forbid"]);
 
 export const ruleSchema = v.pipe(
   v.strictObject({
@@ -91,7 +91,6 @@ export const configSchema = v.strictObject({
 });
 
 export type Strategy = v.InferOutput<typeof strategySchema>;
-export type RuleStrategy = v.InferOutput<typeof ruleStrategySchema>;
 export type Rule = v.InferOutput<typeof ruleSchema>;
 export type Config = v.InferOutput<typeof configSchema>;
 export type MergeSettings = Config["merge"];

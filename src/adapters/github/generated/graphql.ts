@@ -97,6 +97,15 @@ export type StatusState =
   /** Status is successful. */
   | 'SUCCESS';
 
+type RollupContext_CheckRun_Fragment = { __typename: 'CheckRun', name: string, status: CheckStatusState, conclusion: CheckConclusionState | null };
+
+type RollupContext_StatusContext_Fragment = { __typename: 'StatusContext', state: StatusState };
+
+export type RollupContextFragment =
+  | RollupContext_CheckRun_Fragment
+  | RollupContext_StatusContext_Fragment
+;
+
 export type PullRequestStateQueryVariables = Exact<{
   owner: string;
   repo: string;

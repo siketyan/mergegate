@@ -115,21 +115,13 @@ export async function handleDelivery(
       const known = checkRun.pull_requests.map((pull) => pull.number);
 
       switch (action) {
-        // Someone else's check finishing can change whether an assisted merge
-        // is ready. Our own finishing would loop.
-        case "completed": {
-          if (own) {
-            return;
-          }
-          const api = context.github.forInstallation(parsed.output.installation.id);
-          await evaluateSha(context, api, repo, checkRun.head_sha, known);
-          return;
-        }
-
-        // The Re-run button on our own check run. The app remembers nothing
-        // between deliveries, so re-evaluating from scratch is the whole of it.
+        // Someone else's check finishing can change whether an assisted merge is
+        // ready, and our own finishing would loop. The Re-run button is the same
+        // evaluation with the polarity the other way round: GitHub sends it only
+        // to the app that owns the check run.
+        case "completed":
         case "rerequested": {
-          if (!own) {
+          if (own !== (action === "rerequested")) {
             return;
           }
           const api = context.github.forInstallation(parsed.output.installation.id);

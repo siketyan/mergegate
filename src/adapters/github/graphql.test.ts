@@ -1,9 +1,13 @@
 import { expect, test } from "vite-plus/test";
-import type { CheckConclusionState, PullRequestStateQuery } from "./generated/graphql.ts";
-import { rollupPage, type RollupContext, toPullRequestState } from "./graphql.ts";
+import type {
+  CheckConclusionState,
+  PullRequestStateQuery,
+  RollupContextFragment,
+} from "./generated/graphql.ts";
+import { rollupPage, toPullRequestState } from "./graphql.ts";
 
 function response(options: {
-  contexts?: (RollupContext | null)[];
+  contexts?: (RollupContextFragment | null)[];
   hasNextPage?: boolean;
   endCursor?: string | null;
 }): PullRequestStateQuery {
@@ -46,7 +50,7 @@ function response(options: {
   };
 }
 
-function checkRun(name: string, conclusion: CheckConclusionState): RollupContext {
+function checkRun(name: string, conclusion: CheckConclusionState): RollupContextFragment {
   return { __typename: "CheckRun", name, status: "COMPLETED", conclusion };
 }
 
