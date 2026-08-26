@@ -44,6 +44,20 @@ $ wrangler deploy     # Deploy
   incompatibility with Vite+ was fixed in cloudflare/workers-sdk#13075 — but **write core tests so they do
   not need workerd** (see the testing policy below).
 
+## Branches and deployment
+
+- **`main`** is where work lands, squashed. It deploys to the canary Worker,
+  `mergegate-canary`, through `wrangler deploy --env canary`.
+- **`release`** is what runs in production. It gets there by promotion — a pull request from `main`
+  merged with a merge commit — never by pushing to it.
+- **The rules that say so are `.github/mergegate.yml`**, read by the deployed app: this repository is the
+  first thing mergegate governs. Changing behaviour that the file relies on means checking the file too.
+- **release-please** keeps a release pull request open on `release`; merging it writes `CHANGELOG.md`,
+  bumps the version and tags the release. `.release-please-manifest.json` is its state — never edit it by
+  hand. This is what Conventional Commits are for here.
+- Canary and production are separate Workers with separate secrets, so each needs its own GitHub App
+  installation and its own `wrangler secret put ... --env canary`.
+
 ## Layout and direction of dependencies
 
 Everything under `src/` except `adapters/` is the core: runtime-agnostic, web standard APIs only.
