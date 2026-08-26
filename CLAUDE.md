@@ -40,6 +40,7 @@ $ vp test             # Vitest (single run)
 $ vp fmt              # Oxfmt only
 $ vp lint             # Oxlint only
 $ vp run codegen      # Regenerate GraphQL types after editing a query
+$ vp run schema       # Regenerate the JSON Schema after editing the config schema
 $ wrangler dev        # Run the Worker locally
 $ wrangler deploy     # Deploy
 ```
@@ -67,6 +68,8 @@ src/
     github/generated/      # graphql-codegen output. Never edit by hand
     cloudflare/            # Workers entry: env bindings, ctx.waitUntil, KV
     shared/                # Adapter-side helpers (logger, env)
+schema/                    # JSON Schema for the config file, generated. Never edit by hand
+scripts/                   # Generators run through `vp run`
 test/
   fixtures/                # Real webhook payload samples
   fake-github.ts           # In-memory GitHubApi and test context
@@ -140,6 +143,8 @@ These map directly onto promises the README makes to users. Do not break them.
 - REST goes through the typed wrappers (`octokit.rest.checks.create`, …), never raw `octokit.request`.
 - GraphQL responses are typed by graphql-codegen from GitHub's published schema, so a query and its types
   cannot drift. Edit the query, then run `vp run codegen`.
+- The JSON Schema users point their editor at is generated from the valibot schema by `vp run schema`. Both
+  generated artefacts are committed, excluded from the formatter, and checked for drift in CI.
 - `mergeable` is computed asynchronously and can be `null`. Treat that as undetermined and re-fetch with a
   short backoff — but do not wait forever.
 - A merge method disabled in repository settings returns 405 from the API too. Surface the message in the

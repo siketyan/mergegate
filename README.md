@@ -192,6 +192,18 @@ stays out of the way.
 `.github/mergegate.yml` is read **from the default branch**, never from the PR head, so that a PR cannot
 rewrite the rules that govern it.
 
+A JSON Schema is published with the app, so an editor can complete the keys and flag a typo before it ever
+reaches a check run. Point at it from the top of the file:
+
+```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/siketyan/mergegate/main/schema/mergegate.schema.json
+version: 1
+```
+
+It is generated from the same schema the app validates with, so the two cannot drift apart. The one rule it
+cannot express is that `includeTransitive` needs a head that names a branch rather than only a pattern; the
+app checks that and reports it in the check run.
+
 ### Example: develop / staging / production
 
 ```yaml
@@ -539,6 +551,7 @@ that hands it a `Request` and the four ports above — nothing in `core/` change
 - Check run requested actions (merge from the Checks tab instead of adding a label)
 - Opt-in PR comments explaining the decision
 - Organization-wide defaults inherited from the `.github` repository
+- The configuration schema on SchemaStore, so editors find it without the `$schema` comment
 - Per-PR event serialization with Durable Objects
 - GitHub Enterprise Server support
 
