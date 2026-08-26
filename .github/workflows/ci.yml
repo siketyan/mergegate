@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Sets up the vp CLI, the Node version and the package manager in one
+      # step, so no setup-node or pnpm setup is needed. Pinned to an exact
+      # version: the moving v1 tag stopped being updated at v1.15.0.
+      - uses: voidzero-dev/setup-vp@0cffb0a1ac50daa1541b57d1eb7c843f479522e1 # v1.18.0
+        with:
+          # No node-version: Vite+ resolves it from devEngines.runtime.
+          cache: true
+
+      - run: vp install --frozen-lockfile
+
+      # Format, lint and typecheck. No --fix: CI reports, it does not rewrite.
+      - name: Check
+        run: vp check
+
+      - name: Test
+        run: vp test
+
+      # The GraphQL types are generated from GitHub's published schema and
+      # committed, so a query edited without regenerating them is a stale file.
+      - name: Generated types are up to date
+        run: |
+          vp run codegen
+          git diff --exit-code -- src/adapters/github/generated
+
+      # Catches a Worker that type-checks but cannot be bundled, before the
+      # deploy that Cloudflare runs on merge does.
+      - name: Bundle
+        run: vp exec wrangler deploy --dry-run --outdir "$RUNNER_TEMP/worker"
