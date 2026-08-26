@@ -412,6 +412,7 @@ right base branch — changing the base triggers a fresh evaluation — or close
 | Labelled, changes requested                        | `action_required` | `Cannot merge: changes requested`                       |
 | Labelled, still a draft                            | `action_required` | `Waiting for the pull request to be ready`              |
 | Labelled, mergeability not computed yet            | `action_required` | `Waiting for GitHub to compute mergeability`            |
+| Labelled, more checks than mergegate reads         | `action_required` | `Cannot read every check on this commit`                |
 | Labelled, behind the base (with `requireUpToDate`) | `action_required` | `Waiting for the branch to be up to date`               |
 | Labelled, the merge API refused                    | `action_required` | `Cannot merge`                                          |
 | Assisted merge succeeded                           | `success`         | `Merged by mergegate`                                   |
@@ -436,9 +437,13 @@ their history.
 Even with the `ready-to-merge` label present, the app merges only once all of the following hold.
 
 - The PR is open and not a draft
-- `mergeable` is true (no conflict with the base)
+- `mergeable` is true (no conflict with the base). GitHub computes this asynchronously, so a freshly
+  labelled PR often has no answer yet; mergegate waits a few seconds for one rather than leaving the PR
+  blocked until some other event wakes it. If it still has not settled, the check says so and the label can
+  be re-added
 - With `merge.requireChecks: true`, every check run and commit status other than `mergegate` is
-  success, neutral or skipped
+  success, neutral or skipped. Checks are read past the first page of GitHub's rollup; a commit carrying
+  more than 1,100 of them is refused rather than merged on the part that was read
 - With `merge.requireApproval: true`, `reviewDecision` is `APPROVED` or reviews are not required (`null`).
   `CHANGES_REQUESTED` is always refused
 - With `merge.requireUpToDate: true`, the head is up to date with the base

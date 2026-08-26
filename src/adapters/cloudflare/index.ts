@@ -75,6 +75,10 @@ export default {
       logger,
       // The 202 goes out first; the work continues here.
       deferrer: { defer: (work) => executionContext.waitUntil(work()) },
+      sleep: (milliseconds) =>
+        new Promise((resolve) => {
+          setTimeout(resolve, milliseconds);
+        }),
       env,
       cache: toCache(workerEnv.CACHE),
     };

@@ -15,8 +15,14 @@ import type {
   RepoRef,
 } from "../../core/ports.ts";
 import { decodeContent } from "./content.ts";
-import type { PullRequestStateQuery } from "./generated/graphql.ts";
-import { pullRequestQuery, toPullRequestState } from "./graphql.ts";
+import type { PullRequestCheckContextsQuery, PullRequestStateQuery } from "./generated/graphql.ts";
+import {
+  checkContextsQuery,
+  pullRequestQuery,
+  type RollupContext,
+  rollupPage,
+  toPullRequestState,
+} from "./graphql.ts";
 
 const AppOctokit = Octokit.plugin(restEndpointMethods, retry, throttling);
 
@@ -74,7 +80,54 @@ class OctokitGitHubApi implements GitHubApi {
       // `mergeStateStatus` still lives behind this media type.
       headers: { accept: "application/vnd.github.merge-info-preview+json" },
     });
-    return toPullRequestState(response, options.ownCheckName);
+    // A check beyond the first page of the rollup still gates the merge, so the
+    // rest of it is read rather than assumed to be empty.
+    const rest = await this.#restOfRollup(repo, response);
+    return toPullRequestState(response, options.ownCheckName, rest.contexts, rest.truncated);
+  }
+
+  async #restOfRollup(
+    repo: RepoRef,
+    response: PullRequestStateQuery,
+  ): Promise<{
+    readonly contexts: readonly (RollupContext | null)[];
+    readonly truncated: boolean;
+  }> {
+    const first = rollupPage(response);
+    if (!first.hasNextPage) {
+      return { contexts: [], truncated: false };
+    }
+    if (first.oid === null || first.endCursor === null) {
+      // GitHub says there is more but not where to carry on from. Nothing to
+      // read, and nothing to claim about the checks that were not read.
+      return { contexts: [], truncated: true };
+    }
+
+    const contexts: (RollupContext | null)[] = [];
+    let after: string | null = first.endCursor;
+    // Bounded: a pull request with more than a thousand checks on one commit is
+    // a repository problem, not something to page through forever.
+    for (let page = 0; page < 10 && after !== null; page += 1) {
+      const next: PullRequestCheckContextsQuery =
+        await this.#octokit.graphql<PullRequestCheckContextsQuery>(checkContextsQuery, {
+          owner: repo.owner,
+          repo: repo.repo,
+          oid: first.oid,
+          after,
+        });
+      const object = next.repository?.object;
+      const rollup =
+        object !== null && object !== undefined && "statusCheckRollup" in object
+          ? object.statusCheckRollup
+          : null;
+      if (rollup === null || rollup === undefined) {
+        return { contexts, truncated: true };
+      }
+      contexts.push(...(rollup.contexts.nodes ?? []));
+      after = rollup.contexts.pageInfo.hasNextPage ? rollup.contexts.pageInfo.endCursor : null;
+    }
+    // `after` still set means the page bound stopped the walk, not GitHub.
+    return { contexts, truncated: after !== null };
   }
 
   async upsertCheckRun(repo: RepoRef, input: CheckRunInput): Promise<void> {

@@ -41,7 +41,8 @@ const WAITING: Record<GateReason, { title: string; summary: string }> = {
   "mergeability-unknown": {
     title: "Waiting for GitHub to compute mergeability",
     summary:
-      "GitHub has not finished computing whether this branch merges cleanly. Retrying shortly.",
+      "GitHub had not finished working out whether this branch merges cleanly, and it did not settle " +
+      "while mergegate waited. Push to the branch or re-add the label to try again.",
   },
   conflict: {
     title: "Cannot merge: conflicts with base",
@@ -51,6 +52,12 @@ const WAITING: Record<GateReason, { title: string; summary: string }> = {
   "waiting-checks": {
     title: "Waiting for other checks",
     summary: "mergegate merges once every other check on this commit has succeeded.",
+  },
+  "checks-unreadable": {
+    title: "Cannot read every check on this commit",
+    summary:
+      "This commit has more checks than mergegate reads, so it cannot tell whether they all passed. " +
+      "Merge this pull request by hand, or reduce the number of checks on the commit.",
   },
   "waiting-review": {
     title: "Waiting for review approval",
