@@ -1,7 +1,7 @@
 import { renderCheck } from "../check/render.ts";
 import type { CheckState } from "../check/render.ts";
 import { type Config, FALLBACK_CHECK_NAME, type Strategy } from "../config/schema.ts";
-import { decide } from "../policy/decide.ts";
+import { decide, directions } from "../policy/decide.ts";
 import { isLiteral, matchesPattern } from "../policy/glob.ts";
 import { evaluateGate } from "../policy/gate.ts";
 import type { AppContext, GitHubApi, MergeOutcome, PullRequestState, RepoRef } from "../ports.ts";
@@ -123,13 +123,20 @@ async function resolveCarriedFrom(
 ): Promise<ReadonlySet<string>> {
   const sources = new Set<string>();
   for (const rule of config.rules) {
-    if (!rule.includeTransitive || !matchesPattern(rule.base, pullRequest.base)) {
+    if (!rule.includeTransitive) {
       continue;
     }
-    for (const pattern of rule.head) {
-      // A head that already matches by name needs no lookup.
-      if (isLiteral(pattern) && pattern !== pullRequest.head) {
-        sources.add(pattern);
+    // Both directions the rule applies in, so a back merge that went through an
+    // intermediate branch is looked up the same way a promotion is.
+    for (const direction of directions(rule)) {
+      if (!matchesPattern(direction.base, pullRequest.base)) {
+        continue;
+      }
+      for (const pattern of direction.heads) {
+        // A head that already matches by name needs no lookup.
+        if (isLiteral(pattern) && pattern !== pullRequest.head) {
+          sources.add(pattern);
+        }
       }
     }
   }

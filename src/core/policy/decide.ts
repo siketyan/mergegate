@@ -1,6 +1,6 @@
 import type { Config, Rule, Strategy } from "../config/schema.ts";
 import { isLiteral, matchesPattern } from "./glob.ts";
-import type { Decision, PullRequestRefs, RuleMatch } from "./types.ts";
+import type { Decision, Direction, PullRequestRefs, RuleMatch } from "./types.ts";
 
 function isManual(config: Config, strategy: Strategy): boolean {
   return config.merge.manual.includes(strategy);
@@ -15,14 +15,24 @@ function reachableFromFork(config: Config, rule: Rule): boolean {
   return rule.strategy === "forbid" || isManual(config, rule.strategy);
 }
 
-function matches(config: Config, rule: Rule, refs: PullRequestRefs): boolean {
-  if (refs.isFork && !config.merge.allowForkHead && !reachableFromFork(config, rule)) {
+/**
+ * The `(base, head)` pairs one rule stands for. A rule is written in the
+ * direction of the promotion; `includeReversed` adds the back merge, which is
+ * the same relationship travelled the other way.
+ */
+export function directions(rule: Rule): readonly Direction[] {
+  const forward: Direction = { base: rule.base, heads: rule.head };
+  if (!rule.includeReversed) {
+    return [forward];
+  }
+  return [forward, ...rule.head.map((pattern) => ({ base: pattern, heads: [rule.base] }))];
+}
+
+function matchesDirection(rule: Rule, direction: Direction, refs: PullRequestRefs): boolean {
+  if (!matchesPattern(direction.base, refs.base)) {
     return false;
   }
-  if (!matchesPattern(rule.base, refs.base)) {
-    return false;
-  }
-  if (rule.head.some((pattern) => matchesPattern(pattern, refs.head))) {
+  if (direction.heads.some((pattern) => matchesPattern(pattern, refs.head))) {
     return true;
   }
   // A promotion that had to go through an intermediate branch does not carry the
@@ -32,8 +42,15 @@ function matches(config: Config, rule: Rule, refs: PullRequestRefs): boolean {
   return (
     rule.includeTransitive === true &&
     carriedFrom !== undefined &&
-    rule.head.some((pattern) => isLiteral(pattern) && carriedFrom.has(pattern))
+    direction.heads.some((pattern) => isLiteral(pattern) && carriedFrom.has(pattern))
   );
+}
+
+function matches(config: Config, rule: Rule, refs: PullRequestRefs): boolean {
+  if (refs.isFork && !config.merge.allowForkHead && !reachableFromFork(config, rule)) {
+    return false;
+  }
+  return directions(rule).some((direction) => matchesDirection(rule, direction, refs));
 }
 
 function decideStrategy(config: Config, strategy: Strategy, match: RuleMatch): Decision {

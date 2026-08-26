@@ -53,6 +53,7 @@ test("head defaults to matching every branch", () => {
       head: ["**"],
       strategy: "merge",
       includeTransitive: false,
+      includeReversed: false,
     });
   }
 });
@@ -101,6 +102,67 @@ rules:
   - base: staging
     head: "merge/*"
     includeTransitive: true
+    strategy: merge
+`).join(" "),
+  ).toContain("includeTransitive");
+});
+
+test("includeReversed defaults to off and needs a head of its own", () => {
+  const ok = parseConfig(`
+version: 1
+rules:
+  - base: staging
+    head: develop
+    includeReversed: true
+    strategy: merge
+`);
+  expect(ok).toMatchObject({ ok: true });
+  if (ok.ok) {
+    expect(ok.config.rules[0]?.includeReversed).toBe(true);
+  }
+
+  // Reversing the catch-all would quietly match every pull request out of the
+  // base, which is never what writing one rule for a pair of branches meant.
+  expect(
+    errorsOf(
+      "version: 1\nrules:\n  - base: staging\n    includeReversed: true\n    strategy: merge\n",
+    ).join(" "),
+  ).toContain("includeReversed");
+  expect(
+    errorsOf(`
+version: 1
+rules:
+  - base: staging
+    head: "**"
+    includeReversed: true
+    strategy: merge
+`).join(" "),
+  ).toContain("includeReversed");
+});
+
+test("the reversed direction gives includeTransitive a branch to follow", () => {
+  // The base is a head in the reversed direction, so a literal base is enough
+  // even when every head is a pattern.
+  expect(
+    parseConfig(`
+version: 1
+rules:
+  - base: staging
+    head: "release/*"
+    includeTransitive: true
+    includeReversed: true
+    strategy: merge
+`),
+  ).toMatchObject({ ok: true });
+
+  expect(
+    errorsOf(`
+version: 1
+rules:
+  - base: "staging/*"
+    head: "release/*"
+    includeTransitive: true
+    includeReversed: true
     strategy: merge
 `).join(" "),
   ).toContain("includeTransitive");

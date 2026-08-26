@@ -1,5 +1,11 @@
 import type { Rule, Strategy } from "../config/schema.ts";
 
+/** One direction a rule applies in: a base pattern and the heads it accepts. */
+export interface Direction {
+  readonly base: string;
+  readonly heads: readonly string[];
+}
+
 /** Which rule produced a decision, for the check run output. */
 export type RuleMatch =
   | { readonly source: "rule"; readonly index: number; readonly rule: Rule }

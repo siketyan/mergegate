@@ -183,6 +183,36 @@ test("a head that already matches by name is never looked up", async () => {
   expect(state.checkRuns[0]).toMatchObject({ title: "Merge commit required" });
 });
 
+test("the back merge is looked up from the other end", async () => {
+  // base and head swap places under includeReversed, so the branch whose
+  // commits are followed swaps with them.
+  const state = await run(
+    {
+      configSource: `
+version: 1
+rules:
+  - base: staging
+    head: develop
+    includeTransitive: true
+    includeReversed: true
+    strategy: merge
+  - base: "**"
+    strategy: squash
+`,
+      carriedFrom: ["staging"],
+    },
+    { base: "develop", head: "resolve-the-conflicts" },
+  );
+
+  expect(state.carriesQueries).toEqual([
+    { base: "develop", head: "resolve-the-conflicts", source: "staging" },
+  ]);
+  expect(state.checkRuns[0]).toMatchObject({
+    conclusion: "action_required",
+    title: "Merge commit required",
+  });
+});
+
 test("a configuration without includeTransitive costs no lookups", async () => {
   const state = await run({}, { head: "resolve-the-conflicts" });
   expect(state.carriesQueries).toEqual([]);
