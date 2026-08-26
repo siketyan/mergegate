@@ -196,13 +196,9 @@ A JSON Schema is published with the app, so an editor can complete the keys and 
 reaches a check run. Point at it from the top of the file:
 
 ```yaml
-# yaml-language-server: $schema=https://raw.githubusercontent.com/siketyan/mergegate/main/schema/mergegate.schema.json
+# yaml-language-server: $schema=https://mergegate.s6n.workers.dev/mergegate.schema.json
 version: 1
 ```
-
-Every deployment serves the same file at `https://<your-worker>/mergegate.schema.json`. Prefer that URL when
-you self-host: it is the schema the app you are actually talking to validates with, while the one above
-tracks whatever is on `main`.
 
 It is generated from the same schema the app validates with, so the two cannot drift apart. The one rule it
 cannot express is that `includeTransitive` needs a head that names a branch rather than only a pattern; the

@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://raw.githubusercontent.com/siketyan/mergegate/main/schema/mergegate.schema.json",
+  "$id": "https://mergegate.s6n.workers.dev/mergegate.schema.json",
   "title": "mergegate configuration",
   "description": "Merge strategy rules for .github/mergegate.yml",
   "type": "object",

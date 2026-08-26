@@ -20,7 +20,7 @@ const schema = {
   // The converter emits draft-07 constructs and says so itself; this only
   // fixes where the key lands in the file.
   $schema: generated.$schema,
-  $id: "https://raw.githubusercontent.com/siketyan/mergegate/main/schema/mergegate.schema.json",
+  $id: "https://mergegate.s6n.workers.dev/mergegate.schema.json",
   title: "mergegate configuration",
   description: "Merge strategy rules for .github/mergegate.yml",
   ...generated,
