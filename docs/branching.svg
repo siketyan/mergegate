@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 300" width="920" height="300" font-family="ui-sans-serif, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="sq-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#1a7f37"/>
+    </marker>
+    <marker id="mg-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#bf8700"/>
+    </marker>
+    <marker id="mg-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#1f6feb"/>
+    </marker>
+    <marker id="sq-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#cf222e"/>
+    </marker>
+  </defs>
+
+  <rect x="0.5" y="0.5" width="919" height="299" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+
+  <g stroke="#dde3ea" stroke-width="1.5" stroke-dasharray="3 5">
+    <line x1="140" y1="54"  x2="890" y2="54"/>
+    <line x1="140" y1="186" x2="890" y2="186"/>
+  </g>
+
+  <g stroke="none">
+    <rect x="294" y="231" width="122" height="26" rx="13" fill="#1a7f37" opacity="0.10"/>
+    <rect x="629" y="99"  width="77"  height="26" rx="13" fill="#cf222e" opacity="0.10"/>
+  </g>
+
+  <g fill="none" stroke-width="5" stroke-linecap="round">
+    <path d="M140 54 H890" stroke="#1f6feb"/>
+    <path d="M165 54 C 200 54, 205 186, 240 186 H890" stroke="#bf8700"/>
+    <path d="M265 186 C 292 186, 295 244, 322 244 H400" stroke="#1a7f37"/>
+    <path d="M560 54 C 587 54, 590 112, 617 112 H690" stroke="#cf222e"/>
+    <path d="M455 186 C 505 186, 500 124, 548 67" stroke="#bf8700" marker-end="url(#mg-amber)"/>
+    <path d="M745 54 C 795 54, 790 117, 838 173" stroke="#1f6feb" marker-end="url(#mg-blue)"/>
+  </g>
+
+  <g stroke-width="3" stroke-dasharray="6 5">
+    <line x1="407" y1="237" x2="440" y2="199" stroke="#1a7f37" marker-end="url(#sq-green)"/>
+    <line x1="697" y1="105" x2="730" y2="67"  stroke="#cf222e" marker-end="url(#sq-red)"/>
+  </g>
+  <text x="433" y="224" font-size="13" font-weight="700" fill="#1a7f37">squash</text>
+  <text x="703" y="80"  font-size="13" font-weight="700" fill="#cf222e" text-anchor="end">squash</text>
+  <text x="502" y="122" font-size="13" font-weight="700" fill="#bf8700" text-anchor="end">merge</text>
+  <text x="792" y="127" font-size="13" font-weight="700" fill="#1f6feb" text-anchor="end">merge</text>
+
+  <circle cx="165" cy="54" r="6.5" fill="#1f6feb"/>
+  <g fill="#1a7f37">
+    <circle cx="310" cy="244" r="6.5"/>
+    <circle cx="355" cy="244" r="6.5"/>
+    <circle cx="400" cy="244" r="6.5"/>
+  </g>
+  <g fill="#cf222e">
+    <circle cx="645" cy="112" r="6.5"/>
+    <circle cx="690" cy="112" r="6.5"/>
+  </g>
+
+  <circle cx="560" cy="54"  r="8" fill="#ffffff" stroke="#1f6feb" stroke-width="4"/>
+  <circle cx="850" cy="186" r="8" fill="#ffffff" stroke="#bf8700" stroke-width="4"/>
+
+  <circle cx="455" cy="186" r="17" fill="#1a7f37" opacity="0.13"/>
+  <rect x="446" y="177" width="18" height="18" rx="3" fill="#1a7f37" stroke="#ffffff" stroke-width="2.5"/>
+  <circle cx="745" cy="54" r="17" fill="#cf222e" opacity="0.13"/>
+  <rect x="736" y="45" width="18" height="18" rx="3" fill="#cf222e" stroke="#ffffff" stroke-width="2.5"/>
+
+  <g font-size="13" font-weight="600">
+    <rect x="52" y="40"  width="66" height="28" rx="5" fill="#1f6feb"/>
+    <text x="85" y="58"  fill="#ffffff" text-anchor="middle">release</text>
+    <rect x="44" y="172" width="74" height="28" rx="5" fill="#bf8700"/>
+    <text x="81" y="190" fill="#ffffff" text-anchor="middle">develop</text>
+    <text x="296" y="277" fill="#1a7f37">feature/login</text>
+    <text x="629" y="145" fill="#cf222e">hotfix/crash</text>
+  </g>
+</svg>
