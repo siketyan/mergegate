@@ -1,0 +1,153 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://mergegate.s6n.workers.dev/mergegate.schema.json",
+  "title": "mergegate configuration",
+  "description": "Merge strategy rules for .github/mergegate.yml",
+  "type": "object",
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "defaults": {
+      "type": "object",
+      "properties": {
+        "strategy": {
+          "enum": [
+            "squash",
+            "merge",
+            "rebase"
+          ],
+          "type": "string",
+          "default": "squash"
+        }
+      },
+      "required": [],
+      "additionalProperties": false,
+      "default": {}
+    },
+    "check": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "default": "mergegate"
+        }
+      },
+      "required": [],
+      "additionalProperties": false,
+      "default": {}
+    },
+    "merge": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "default": "ready-to-merge"
+        },
+        "manual": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "squash",
+              "merge",
+              "rebase"
+            ],
+            "type": "string"
+          },
+          "default": [
+            "squash"
+          ]
+        },
+        "requireApproval": {
+          "type": "boolean",
+          "default": true
+        },
+        "requireChecks": {
+          "type": "boolean",
+          "default": true
+        },
+        "requireUpToDate": {
+          "type": "boolean",
+          "default": false
+        },
+        "allowForkHead": {
+          "type": "boolean",
+          "default": false
+        },
+        "deleteBranchOnMerge": {
+          "type": "boolean",
+          "default": false
+        },
+        "removeLabelOnFailure": {
+          "type": "boolean",
+          "default": true
+        },
+        "commitTitle": {
+          "type": "string",
+          "default": "Merge {head} into {base} (#{number})"
+        },
+        "commitMessage": {
+          "type": "string",
+          "default": ""
+        }
+      },
+      "required": [],
+      "additionalProperties": false,
+      "default": {}
+    },
+    "rules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "base": {
+            "type": "string",
+            "minLength": 1
+          },
+          "head": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "minItems": 1
+              }
+            ],
+            "default": "**"
+          },
+          "strategy": {
+            "enum": [
+              "squash",
+              "merge",
+              "rebase",
+              "forbid"
+            ],
+            "type": "string"
+          },
+          "includeTransitive": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "required": [
+          "base",
+          "strategy"
+        ],
+        "additionalProperties": false
+      },
+      "default": []
+    }
+  },
+  "required": [
+    "version"
+  ],
+  "additionalProperties": false
+}

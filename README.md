@@ -192,6 +192,18 @@ stays out of the way.
 `.github/mergegate.yml` is read **from the default branch**, never from the PR head, so that a PR cannot
 rewrite the rules that govern it.
 
+A JSON Schema is published with the app, so an editor can complete the keys and flag a typo before it ever
+reaches a check run. Point at it from the top of the file:
+
+```yaml
+# yaml-language-server: $schema=https://mergegate.s6n.workers.dev/mergegate.schema.json
+version: 1
+```
+
+It is generated from the same schema the app validates with, so the two cannot drift apart. The one rule it
+cannot express is that `includeTransitive` needs a head that names a branch rather than only a pattern; the
+app checks that and reports it in the check run.
+
 ### Example: develop / staging / production
 
 ```yaml
@@ -502,6 +514,10 @@ The webhook URL is `https://<your-worker>/webhooks/github`. Health check: `GET /
 validates the secrets: a 500 there names what is wrong with them (a PKCS#1 key, a mangled PEM, an app
 slug where the numeric id belongs) instead of failing later on the first API call.
 
+`GET /mergegate.schema.json` serves the configuration schema, as a Workers static asset rather than from the
+Worker itself: matching requests never reach the script, so it costs no invocations and cannot slow a
+delivery down.
+
 > [!IMPORTANT]
 > GitHub hands you a PKCS#1 private key, but WebCrypto wants PKCS#8. Convert it first:
 >
@@ -539,6 +555,7 @@ that hands it a `Request` and the four ports above — nothing in `core/` change
 - Check run requested actions (merge from the Checks tab instead of adding a label)
 - Opt-in PR comments explaining the decision
 - Organization-wide defaults inherited from the `.github` repository
+- The configuration schema on SchemaStore, so editors find it without the `$schema` comment
 - Per-PR event serialization with Durable Objects
 - GitHub Enterprise Server support
 

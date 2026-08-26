@@ -8,6 +8,14 @@
   "observability": {
     "enabled": true,
   },
+  // The generated JSON Schema, served so a repository can point its editor at
+  // this deployment rather than at a file on GitHub. A request that matches an
+  // asset never reaches the Worker; "none" sends everything else to it, which
+  // is how /webhooks/github and /health keep working.
+  "assets": {
+    "directory": "./schema",
+    "not_found_handling": "none",
+  },
   // Secrets (set with `wrangler secret put`):
   //   GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY (PKCS#8), GITHUB_WEBHOOK_SECRET
   //

@@ -12,10 +12,11 @@
   "scripts": {
     "check": "vp check",
     "test": "vp test",
-    "codegen": "graphql-codegen --config codegen.ts",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "prepare": "vp config"
+    "prepare": "vp config",
+    "codegen": "graphql-codegen --config codegen.ts",
+    "schema": "node scripts/json-schema.ts"
   },
   "dependencies": {
     "@octokit/auth-app": "8.3.0",
@@ -32,6 +33,7 @@
     "@graphql-codegen/typescript-operations": "6.1.6",
     "@octokit/graphql-schema": "15.26.1",
     "@types/node": "26.3.0",
+    "@valibot/to-json-schema": "1.7.1",
     "graphql": "16.14.2",
     "typescript": "7.0.2",
     "vite": "catalog:",

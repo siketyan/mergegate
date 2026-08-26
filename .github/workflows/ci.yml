@@ -39,12 +39,14 @@ jobs:
       - name: Test
         run: vp test
 
-      # The GraphQL types are generated from GitHub's published schema and
-      # committed, so a query edited without regenerating them is a stale file.
-      - name: Generated types are up to date
+      # The GraphQL types come from GitHub's published schema and the JSON
+      # Schema from the valibot one. Both are committed, so a source edited
+      # without a regen leaves a stale file behind.
+      - name: Generated files are up to date
         run: |
           vp run codegen
-          git diff --exit-code -- src/adapters/github/generated
+          vp run schema
+          git diff --exit-code -- src/adapters/github/generated schema
 
       # Catches a Worker that type-checks but cannot be bundled, before the
       # deploy that Cloudflare runs on merge does.

@@ -38,8 +38,8 @@ export default defineConfig({
     ],
   },
   fmt: {
-    // graphql-codegen owns this file; leaving it alone keeps `vp run codegen`
-    // output byte-identical to what is committed.
-    ignorePatterns: ["src/adapters/github/generated/**"],
+    // Generators own these; leaving them alone keeps `vp run codegen` and
+    // `vp run schema` output byte-identical to what is committed.
+    ignorePatterns: ["src/adapters/github/generated/**", "schema/**"],
   },
 });
