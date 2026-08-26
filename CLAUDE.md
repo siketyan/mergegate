@@ -12,13 +12,6 @@ commit itself once the `ready-to-merge` label is added.
 The full user-facing specification lives in **[README.md](./README.md)**. **Whenever behaviour changes,
 update the README as well.** The README is the specification; the implementation follows it.
 
-## Current state
-
-Scaffolded. `core` is implemented and tested: configuration parsing, the policy that turns
-`(base, head)` into a decision, the merge gate, check run rendering, webhook signature verification and
-the event handlers. The Cloudflare and Node adapters wire it up, and the Octokit adapter implements the
-`GitHubApi` port. Nothing has been deployed and the app has never talked to real GitHub yet.
-
 ## Stack
 
 - **Language**: TypeScript (strict, ESM only)
