@@ -231,7 +231,7 @@ test("the matched rule is reported back", () => {
   expect(decision.match).toEqual({
     source: "rule",
     index: 0,
-    rule: { base: "staging", head: ["develop"], strategy: "merge" },
+    rule: { base: "staging", head: ["develop"], strategy: "merge", includeTransitive: false },
   });
 });
 
@@ -296,4 +296,93 @@ rules:
     kind: "manual",
     strategy: "squash",
   });
+});
+
+const TRANSITIVE = load(`
+version: 1
+rules:
+  - base: staging
+    head: develop
+    includeTransitive: true
+    strategy: merge
+  - base: "**"
+    strategy: squash
+`);
+
+test("a rule can match on what the pull request carries, not its name", () => {
+  const refs = { base: "staging", head: "resolve-the-conflicts", isFork: false };
+
+  // The branch is named nothing in particular, but it brings develop with it.
+  expect(decide(TRANSITIVE, { ...refs, carriedFrom: new Set(["develop"]) })).toMatchObject({
+    kind: "assisted",
+    strategy: "merge",
+  });
+
+  // The same branch carrying nothing from develop is an ordinary feature.
+  expect(decide(TRANSITIVE, { ...refs, carriedFrom: new Set() })).toMatchObject({
+    kind: "manual",
+    strategy: "squash",
+  });
+  expect(decide(TRANSITIVE, refs)).toMatchObject({ kind: "manual", strategy: "squash" });
+});
+
+test("carrying a branch means nothing without includeTransitive", () => {
+  const config = load(`
+version: 1
+rules:
+  - base: staging
+    head: develop
+    strategy: merge
+  - base: "**"
+    strategy: squash
+`);
+  expect(
+    decide(config, {
+      base: "staging",
+      head: "resolve-the-conflicts",
+      isFork: false,
+      carriedFrom: new Set(["develop"]),
+    }),
+  ).toMatchObject({ kind: "manual", strategy: "squash" });
+});
+
+test("the transitive check follows branches, not patterns", () => {
+  const config = load(`
+version: 1
+rules:
+  - base: staging
+    head: ["release/*", develop]
+    includeTransitive: true
+    strategy: merge
+  - base: "**"
+    strategy: squash
+`);
+  // "release/*" names no branch, so nothing can be carried from it.
+  expect(
+    decide(config, {
+      base: "staging",
+      head: "anything",
+      isFork: false,
+      carriedFrom: new Set(["release/*"]),
+    }),
+  ).toMatchObject({ kind: "manual", strategy: "squash" });
+  expect(
+    decide(config, {
+      base: "staging",
+      head: "anything",
+      isFork: false,
+      carriedFrom: new Set(["develop"]),
+    }),
+  ).toMatchObject({ kind: "assisted", strategy: "merge" });
+});
+
+test("a fork cannot reach an assisted rule by carrying the source branch", () => {
+  expect(
+    decide(TRANSITIVE, {
+      base: "staging",
+      head: "anything",
+      isFork: true,
+      carriedFrom: new Set(["develop"]),
+    }),
+  ).toMatchObject({ kind: "manual", strategy: "squash" });
 });

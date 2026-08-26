@@ -17,6 +17,9 @@ export interface FakeGitHubState {
   merges: { pullNumber: number; input: MergeInput }[];
   removedLabels: { pullNumber: number; label: string }[];
   deletedBranches: string[];
+  /** Sources whose commits the pull request head is deemed to carry. */
+  carriedFrom: string[];
+  carriesQueries: { base: string; head: string; source: string }[];
   mergeOutcome: MergeOutcome;
   ownCheckNames: string[];
 }
@@ -52,6 +55,8 @@ export function createFakeGitHub(initial: Partial<FakeGitHubState> = {}): {
     merges: [],
     removedLabels: [],
     deletedBranches: [],
+    carriedFrom: [],
+    carriesQueries: [],
     mergeOutcome: { ok: true, sha: "merged-sha" },
     ownCheckNames: [],
     ...initial,
@@ -65,6 +70,10 @@ export function createFakeGitHub(initial: Partial<FakeGitHubState> = {}): {
     },
     upsertCheckRun: async (_repo, input) => {
       state.checkRuns.push(input);
+    },
+    carriesCommitsFrom: async (_repo, input) => {
+      state.carriesQueries.push(input);
+      return state.carriedFrom.includes(input.source);
     },
     findPullRequestsForSha: async () => [...state.pullRequests.keys()],
     mergePullRequest: async (_repo, pullNumber, input) => {

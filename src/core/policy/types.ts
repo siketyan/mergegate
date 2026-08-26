@@ -23,4 +23,10 @@ export interface PullRequestRefs {
   readonly base: string;
   readonly head: string;
   readonly isFork: boolean;
+  /**
+   * Branches whose commits this pull request brings into the base, resolved
+   * before the decision so that the policy stays a pure function. Only the
+   * literal head branches of `includeTransitive` rules are ever looked up.
+   */
+  readonly carriedFrom?: ReadonlySet<string>;
 }

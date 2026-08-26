@@ -60,7 +60,7 @@ src/
     check/                 # Building check run output (title / summary)
     handlers/              # Per-event webhook handling, talking to GitHub through ports
     policy/gate.ts         # Merge readiness: the gates GitHub would apply if we did not bypass it
-    ports.ts               # GitHubApi, Env, Cache, Logger, Clock, Deferrer interfaces
+    ports.ts               # GitHubApi, Env, Cache, Logger, Deferrer interfaces
     webhook.ts             # Signature verification and dispatch. (Request) => Promise<Response>
   adapters/
     github/                # GitHubApi implementation over Octokit (REST + GraphQL)

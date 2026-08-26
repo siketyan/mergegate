@@ -113,6 +113,40 @@ class OctokitGitHubApi implements GitHubApi {
     });
   }
 
+  async #mergeBase(repo: RepoRef, base: string, head: string): Promise<string> {
+    const { data } = await this.#octokit.rest.repos.compareCommitsWithBasehead({
+      owner: repo.owner,
+      repo: repo.repo,
+      basehead: `${base}...${head}`,
+      // Only the merge base and the status are read; the commit list is not.
+      per_page: 1,
+    });
+    return data.merge_base_commit.sha;
+  }
+
+  async carriesCommitsFrom(
+    repo: RepoRef,
+    input: { readonly base: string; readonly head: string; readonly source: string },
+  ): Promise<boolean> {
+    // Where the base and the source last agreed, and how much of the source the
+    // head has. Comparing those two, rather than the source's tip, keeps the
+    // answer stable when the source branch moves on afterwards.
+    const [agreed, carried] = await Promise.all([
+      this.#mergeBase(repo, input.base, input.source),
+      this.#mergeBase(repo, input.source, input.head),
+    ]);
+    if (agreed === carried) {
+      return false;
+    }
+    const { data } = await this.#octokit.rest.repos.compareCommitsWithBasehead({
+      owner: repo.owner,
+      repo: repo.repo,
+      basehead: `${agreed}...${carried}`,
+      per_page: 1,
+    });
+    return data.status === "ahead";
+  }
+
   async findPullRequestsForSha(repo: RepoRef, sha: string): Promise<readonly number[]> {
     const { data } = await this.#octokit.rest.repos.listPullRequestsAssociatedWithCommit({
       owner: repo.owner,
