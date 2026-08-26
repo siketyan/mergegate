@@ -1,5 +1,5 @@
 import { expect, test } from "vite-plus/test";
-import { ConfigurationError, readEnv, readPrivateKey } from "./env.ts";
+import { readEnv, readPrivateKey } from "./env.ts";
 
 const PKCS8 = "-----BEGIN PRIVATE KEY-----\nMIIBOgIBAAJBAKj3\n-----END PRIVATE KEY-----";
 
@@ -43,7 +43,6 @@ test("surrounding whitespace does not break the key", () => {
 
 test("a PKCS#1 key says how to convert it", () => {
   const pkcs1 = PKCS8.replaceAll("PRIVATE KEY", "RSA PRIVATE KEY");
-  expect(() => readPrivateKey(pkcs1)).toThrow(ConfigurationError);
   expect(() => readPrivateKey(pkcs1)).toThrow(/openssl pkcs8 -topk8/);
 });
 

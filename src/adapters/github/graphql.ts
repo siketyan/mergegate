@@ -1,15 +1,33 @@
 import type { CheckConclusion } from "../../core/policy/gate.ts";
 import type { PullRequestState } from "../../core/ports.ts";
-import type { PullRequestStateQuery } from "./generated/graphql.ts";
+import type { PullRequestStateQuery, RollupContextFragment } from "./generated/graphql.ts";
+
+/**
+ * The rollup selects the same fields wherever it is read, so both queries take
+ * them from here and codegen types them once.
+ *
+ * The `/* GraphQL *\/` marker is what graphql-codegen picks these literals up by.
+ */
+const rollupContextFragment = /* GraphQL */ `
+  fragment RollupContext on StatusCheckRollupContext {
+    __typename
+    ... on CheckRun {
+      name
+      status
+      conclusion
+    }
+    ... on StatusContext {
+      state
+    }
+  }
+`;
 
 /**
  * One query for everything a decision needs. `reviewDecision` is GitHub's own
  * answer to "does this satisfy the review rules", which beats recounting
  * reviews over REST.
- *
- * The `/* GraphQL *\/` marker is what graphql-codegen picks this up by.
  */
-export const pullRequestQuery = /* GraphQL */ `
+const pullRequestOperation = /* GraphQL */ `
   query PullRequestState($owner: String!, $repo: String!, $number: Int!) {
     repository(owner: $owner, name: $repo) {
       nameWithOwner
@@ -45,15 +63,7 @@ export const pullRequestQuery = /* GraphQL */ `
                     endCursor
                   }
                   nodes {
-                    __typename
-                    ... on CheckRun {
-                      name
-                      status
-                      conclusion
-                    }
-                    ... on StatusContext {
-                      state
-                    }
+                    ...RollupContext
                   }
                 }
               }
@@ -66,7 +76,7 @@ export const pullRequestQuery = /* GraphQL */ `
 `;
 
 /** The rest of the rollup, when the first page did not hold all of it. */
-export const checkContextsQuery = /* GraphQL */ `
+const checkContextsOperation = /* GraphQL */ `
   query PullRequestCheckContexts(
     $owner: String!
     $repo: String!
@@ -83,15 +93,7 @@ export const checkContextsQuery = /* GraphQL */ `
                 endCursor
               }
               nodes {
-                __typename
-                ... on CheckRun {
-                  name
-                  status
-                  conclusion
-                }
-                ... on StatusContext {
-                  state
-                }
+                ...RollupContext
               }
             }
           }
@@ -101,16 +103,9 @@ export const checkContextsQuery = /* GraphQL */ `
   }
 `;
 
-type PullRequestNode = NonNullable<PullRequestStateQuery["repository"]>["pullRequest"];
-export type RollupContext = StatusContextNode;
-
-type StatusContextNode = NonNullable<
-  NonNullable<
-    NonNullable<
-      NonNullable<NonNullable<PullRequestNode>["commits"]["nodes"]>[number]
-    >["commit"]["statusCheckRollup"]
-  >["contexts"]["nodes"]
->[number];
+/** A query carries its fragment with it: GitHub is sent one document. */
+export const pullRequestQuery = `${pullRequestOperation}\n${rollupContextFragment}`;
+export const checkContextsQuery = `${checkContextsOperation}\n${rollupContextFragment}`;
 
 function checkRunConclusion(
   status: string,
@@ -153,7 +148,7 @@ function statusContextConclusion(state: string): CheckConclusion {
 
 /** Every check on the head commit except the one mergegate owns. */
 function otherChecks(
-  nodes: readonly (StatusContextNode | null)[],
+  nodes: readonly (RollupContextFragment | null)[],
   ownCheckName: string,
 ): CheckConclusion[] {
   const conclusions: CheckConclusion[] = [];
@@ -196,17 +191,12 @@ export function rollupPage(response: PullRequestStateQuery): {
 export function toPullRequestState(
   response: PullRequestStateQuery,
   ownCheckName: string,
-  extraContexts: readonly (StatusContextNode | null)[] = [],
+  extraContexts: readonly (RollupContextFragment | null)[] = [],
   checksTruncated = false,
 ): PullRequestState | null {
   const repository = response.repository;
   const pullRequest = repository?.pullRequest;
-  if (
-    repository === null ||
-    repository === undefined ||
-    pullRequest === null ||
-    pullRequest === undefined
-  ) {
+  if (!repository || !pullRequest) {
     return null;
   }
 

@@ -15,14 +15,12 @@ import type {
   RepoRef,
 } from "../../core/ports.ts";
 import { decodeContent } from "./content.ts";
-import type { PullRequestCheckContextsQuery, PullRequestStateQuery } from "./generated/graphql.ts";
-import {
-  checkContextsQuery,
-  pullRequestQuery,
-  type RollupContext,
-  rollupPage,
-  toPullRequestState,
-} from "./graphql.ts";
+import type {
+  PullRequestCheckContextsQuery,
+  PullRequestStateQuery,
+  RollupContextFragment,
+} from "./generated/graphql.ts";
+import { checkContextsQuery, pullRequestQuery, rollupPage, toPullRequestState } from "./graphql.ts";
 
 const AppOctokit = Octokit.plugin(restEndpointMethods, retry, throttling);
 
@@ -90,7 +88,7 @@ class OctokitGitHubApi implements GitHubApi {
     repo: RepoRef,
     response: PullRequestStateQuery,
   ): Promise<{
-    readonly contexts: readonly (RollupContext | null)[];
+    readonly contexts: readonly (RollupContextFragment | null)[];
     readonly truncated: boolean;
   }> {
     const first = rollupPage(response);
@@ -103,7 +101,7 @@ class OctokitGitHubApi implements GitHubApi {
       return { contexts: [], truncated: true };
     }
 
-    const contexts: (RollupContext | null)[] = [];
+    const contexts: (RollupContextFragment | null)[] = [];
     let after: string | null = first.endCursor;
     // Bounded: a pull request with more than a thousand checks on one commit is
     // a repository problem, not something to page through forever.
