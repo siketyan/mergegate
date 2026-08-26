@@ -1,0 +1,41 @@
+import { type ConfigResult, defaultConfig, parseConfig } from "../config/parse.ts";
+import { CONFIG_PATH } from "../config/schema.ts";
+import type { AppContext, GitHubApi, RepoRef } from "../ports.ts";
+
+function cacheKey(repo: RepoRef): string {
+  return `config:${repo.owner}/${repo.repo}`;
+}
+
+function fromSource(source: string | null): ConfigResult {
+  return source === null ? { ok: true, config: defaultConfig() } : parseConfig(source);
+}
+
+/** `null` means the repository has no configuration file, which is cacheable too. */
+function decode(cached: string): string | null {
+  const parsed: unknown = JSON.parse(cached);
+  return typeof parsed === "string" ? parsed : null;
+}
+
+/**
+ * Reads the configuration from the default branch, never from the pull request
+ * head, so a pull request cannot rewrite the rules that govern it.
+ */
+export async function loadConfig(
+  context: AppContext,
+  api: GitHubApi,
+  repo: RepoRef,
+): Promise<ConfigResult> {
+  const key = cacheKey(repo);
+  const cached = await context.cache?.get(key);
+  if (cached !== null && cached !== undefined) {
+    return fromSource(decode(cached));
+  }
+
+  const source = await api.readDefaultBranchFile(repo, CONFIG_PATH);
+  await context.cache?.put(key, JSON.stringify(source), context.env.configCacheTtl);
+  return fromSource(source);
+}
+
+export async function invalidateConfig(context: AppContext, repo: RepoRef): Promise<void> {
+  await context.cache?.delete(cacheKey(repo));
+}

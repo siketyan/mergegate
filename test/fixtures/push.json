@@ -1,0 +1,13 @@
+{
+  "ref": "refs/heads/main",
+  "before": "beef000000000000000000000000000000000000",
+  "after": "cafe000000000000000000000000000000000000",
+  "repository": {
+    "id": 1,
+    "name": "squashables",
+    "full_name": "siketyan/squashables",
+    "default_branch": "main",
+    "owner": { "login": "siketyan", "type": "User" }
+  },
+  "installation": { "id": 42 }
+}

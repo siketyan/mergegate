@@ -1,0 +1,20 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "squashables",
+  // wrangler bundles the Worker entry point directly; Vite+ is used for check and test.
+  "main": "src/adapters/cloudflare/index.ts",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+  },
+  // Secrets (set with `wrangler secret put`):
+  //   GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY (PKCS#8), GITHUB_WEBHOOK_SECRET
+  //
+  // Optional cache. squashables owns no state, so the binding may be omitted
+  // entirely; without it the config is fetched on every delivery.
+  // "kv_namespaces": [{ "binding": "CACHE", "id": "<your-kv-namespace-id>" }]
+  "vars": {
+    "LOG_LEVEL": "info",
+  },
+}

@@ -14,25 +14,32 @@ update the README as well.** The README is the specification; the implementation
 
 ## Current state
 
-Design phase. Only README.md and CLAUDE.md exist; there is no implementation yet. When implementation
-starts, scaffold it according to the layout below.
+Scaffolded. `core` is implemented and tested: configuration parsing, the policy that turns
+`(base, head)` into a decision, the merge gate, check run rendering, webhook signature verification and
+the event handlers. The Cloudflare and Node adapters wire it up, and the Octokit adapter implements the
+`GitHubApi` port. Nothing has been deployed and the app has never talked to real GitHub yet.
 
 ## Stack
 
 - **Language**: TypeScript (strict, ESM only)
 - **Toolchain**: [Vite+](https://viteplus.dev) (`vp`) — Vite, Vitest, Oxlint, Oxfmt and tsdown behind one CLI
-- **Primary runtime**: Cloudflare Workers (`wrangler`)
-- **GitHub API**: Octokit (`@octokit/core` plus `@octokit/auth-app`, in a WebCrypto-compatible setup)
+- **Package manager**: pnpm, pinned through `devEngines`. Vite+ itself comes from the `pnpm-workspace.yaml`
+  catalog
+- **Runtime**: Cloudflare Workers (`wrangler`). There is deliberately no second runtime adapter yet
+- **Validation**: valibot (small enough to ship in a Worker)
+- **GitHub API**: Octokit — `@octokit/core` with `restEndpointMethods`, `retry` and `throttling`, plus
+  `@octokit/auth-app` in a WebCrypto-compatible setup
 
 ### Commands
 
 ```console
-$ vp install          # Install dependencies
+$ vp install          # Install dependencies (pnpm underneath)
 $ vp check            # Format + lint + typecheck (always run before committing)
 $ vp check --fix      # Auto-fix
 $ vp test             # Vitest (single run)
 $ vp fmt              # Oxfmt only
 $ vp lint             # Oxlint only
+$ vp run codegen      # Regenerate GraphQL types after editing a query
 $ wrangler dev        # Run the Worker locally
 $ wrangler deploy     # Deploy
 ```
@@ -52,15 +59,22 @@ src/
     policy/                # (base, head, config) -> Decision, pure functions. The heart of the app
     check/                 # Building check run output (title / summary)
     handlers/              # Per-event webhook handling, talking to GitHub through ports
+    policy/gate.ts         # Merge readiness: the gates GitHub would apply if we did not bypass it
     ports.ts               # GitHubApi, Env, Cache, Logger, Clock, Deferrer interfaces
     webhook.ts             # Signature verification and dispatch. (Request) => Promise<Response>
   adapters/
     github/                # GitHubApi implementation over Octokit (REST + GraphQL)
+    github/generated/      # graphql-codegen output. Never edit by hand
     cloudflare/            # Workers entry: env bindings, ctx.waitUntil, KV
-    node/                  # node:http entry (self-hosting and local verification)
+    shared/                # Adapter-side helpers (logger, env)
 test/
   fixtures/                # Real webhook payload samples
+  fake-github.ts           # In-memory GitHubApi and test context
+  architecture.test.ts     # Checks the layering rules below rather than trusting them
 ```
+
+Unit tests live next to the code they cover as `*.test.ts`. `test/` holds fixtures and anything shared
+between test files.
 
 **Dependencies always point `adapters -> core`.**
 
@@ -68,6 +82,8 @@ test/
 - Never import `node:*` inside `core`, and never touch `process.env` (everything goes through the `Env` port).
 - `core` may only use web standard APIs (`fetch`, `crypto.subtle`, `URL`, `TextEncoder`, …).
 - Adding a new runtime must only require changes under `adapters/`.
+- The first two rules are enforced by `no-restricted-imports` in `vite.config.ts`, so `vp check` catches
+  them; `test/architecture.test.ts` covers what a lint rule cannot see.
 
 ## Invariants
 
@@ -105,6 +121,8 @@ These map directly onto promises the README makes to users. Do not break them.
 ## Conventions
 
 - TypeScript strict. No `any`, no non-null assertions (`!`). Validate all external input.
+- Pin every dependency to an exact version. No `^`, no `~`.
+- No barrel files: import from the module that defines the thing.
 - Model domain types (`Decision`, `Strategy`, `Rule`, `MergeGate`) as discriminated unions and branch with
   `switch` so exhaustiveness checking applies.
 - Keep the config schema and its validation in one place, deriving the types from the schema.
@@ -119,6 +137,9 @@ These map directly onto promises the README makes to users. Do not break them.
 - `pull_requests` in `check_suite.completed` is empty for PRs from forks. Fall back to
   `GET /repos/{owner}/{repo}/commits/{sha}/pulls`.
 - Use GraphQL `reviewDecision` for review state instead of recounting reviews over REST.
+- REST goes through the typed wrappers (`octokit.rest.checks.create`, …), never raw `octokit.request`.
+- GraphQL responses are typed by graphql-codegen from GitHub's published schema, so a query and its types
+  cannot drift. Edit the query, then run `vp run codegen`.
 - `mergeable` is computed asynchronously and can be `null`. Treat that as undetermined and re-fetch with a
   short backoff — but do not wait forever.
 - A merge method disabled in repository settings returns 405 from the API too. Surface the message in the

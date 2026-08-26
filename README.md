@@ -40,12 +40,12 @@ content moves over as one new commit and the source branch's history ends there.
 In a repository with several long-lived branches — `develop` / `staging` / `production`, or `main` / `release` —
 the right merge strategy depends on the kind of PR.
 
-| PR | Wanted strategy | Why |
-| --- | --- | --- |
-| `feature/*` -> `develop` | Squash | Collapse the work into one readable commit |
-| `develop` -> `staging` | Merge commit | Squashing re-introduces the same change under a new SHA, so every later promotion PR conflicts |
-| `staging` -> `production` | Merge commit | Same as above |
-| `hotfix/*` -> `production` | Squash | A one-off fix is fine to collapse |
+| PR                         | Wanted strategy | Why                                                                                            |
+| -------------------------- | --------------- | ---------------------------------------------------------------------------------------------- |
+| `feature/*` -> `develop`   | Squash          | Collapse the work into one readable commit                                                     |
+| `develop` -> `staging`     | Merge commit    | Squashing re-introduces the same change under a new SHA, so every later promotion PR conflicts |
+| `staging` -> `production`  | Merge commit    | Same as above                                                                                  |
+| `hotfix/*` -> `production` | Squash          | A one-off fix is fine to collapse                                                              |
 
 Squash a promotion PR once and the shared ancestry between the branches is broken; the diffs diverge from
 then on. Merge-commit a feature PR and `develop`'s history fills up with WIP commits.
@@ -53,9 +53,9 @@ then on. Merge-commit a feature PR and `develop`'s history fills up with WIP com
 
 ### How far the built-in features get you
 
-| Feature | Granularity | Limit |
-| --- | --- | --- |
-| Repository setting "Allow squash merging" and friends | Whole repository | Cannot vary per branch |
+| Feature                                                                          | Granularity         | Limit                               |
+| -------------------------------------------------------------------------------- | ------------------- | ----------------------------------- |
+| Repository setting "Allow squash merging" and friends                            | Whole repository    | Cannot vary per branch              |
 | Ruleset rule "Require a pull request before merging" > **Allowed merge methods** | **Per base branch** | Cannot condition on the head branch |
 
 The ruleset merge method rule is powerful, and if the base branch alone determines the strategy, it is all
@@ -157,14 +157,14 @@ Under Settings > General > Pull Requests, **enable every merge method you intend
 
 Create one ruleset targeting the base branches you want to protect (`develop`, `staging`, `production`, …).
 
-| Setting | Value |
-| --- | --- |
-| Target branches | `develop`, `staging`, `production` (whatever you run) |
-| Require a pull request before merging | Enabled |
-| └ Allowed merge methods | **Squash** only (what humans are allowed to pick) |
-| Require status checks to pass | Enabled |
-| └ Required check | `squashables` (select squashables as the providing app) |
-| Bypass list | squashables (mode: **For pull requests only**) |
+| Setting                               | Value                                                   |
+| ------------------------------------- | ------------------------------------------------------- |
+| Target branches                       | `develop`, `staging`, `production` (whatever you run)   |
+| Require a pull request before merging | Enabled                                                 |
+| └ Allowed merge methods               | **Squash** only (what humans are allowed to pick)       |
+| Require status checks to pass         | Enabled                                                 |
+| └ Required check                      | `squashables` (select squashables as the providing app) |
+| Bypass list                           | squashables (mode: **For pull requests only**)          |
 
 That completes the division of labour:
 
@@ -246,30 +246,30 @@ Note how `base: main` resolves differently depending on the head branch — the 
 ### Reference
 
 ```yaml
-version: 1                    # Required. Only 1 for now
+version: 1 # Required. Only 1 for now
 
 defaults:
-  strategy: squash            # Strategy for PRs that match no rule
+  strategy: squash # Strategy for PRs that match no rule
 
 check:
-  name: squashables           # Check run name. Must match what you register in the ruleset
+  name: squashables # Check run name. Must match what you register in the ruleset
 
 merge:
-  label: ready-to-merge       # Label that triggers an assisted merge
-  manual: [squash]            # Strategies a human may merge from the UI. Keep in sync with Allowed merge methods
-  requireApproval: true       # The review must be approved (or not required)
-  requireChecks: true         # Every check other than squashables must have succeeded
-  requireUpToDate: false      # The head must be up to date with the base
-  allowForkHead: false        # Whether PRs from forks may match non-squash rules
-  deleteBranchOnMerge: false  # Delete the head branch after merging
-  removeLabelOnFailure: true  # Drop the label on a permanent failure so re-adding retries
+  label: ready-to-merge # Label that triggers an assisted merge
+  manual: [squash] # Strategies a human may merge from the UI. Keep in sync with Allowed merge methods
+  requireApproval: true # The review must be approved (or not required)
+  requireChecks: true # Every check other than squashables must have succeeded
+  requireUpToDate: false # The head must be up to date with the base
+  allowForkHead: false # Whether PRs from forks may match non-squash rules
+  deleteBranchOnMerge: false # Delete the head branch after merging
+  removeLabelOnFailure: true # Drop the label on a permanent failure so re-adding retries
   commitTitle: "Merge {head} into {base} (#{number})"
-  commitMessage: ""           # Empty means GitHub's default
+  commitMessage: "" # Empty means GitHub's default
 
 rules:
-  - base: staging             # Required. Pattern for the base branch
-    head: develop             # Defaults to "**"
-    strategy: merge           # squash | merge | rebase | forbid
+  - base: staging # Required. Pattern for the base branch
+    head: develop # Defaults to "**"
+    strategy: merge # squash | merge | rebase | forbid
 ```
 
 #### How rules are evaluated
@@ -283,12 +283,12 @@ rules:
 
 #### What each strategy means
 
-| strategy | Check | Merged by |
-| --- | --- | --- |
-| `squash` | success | A human, via "Squash and merge" |
-| `merge` | action_required, then success once labelled | squashables (`merge_method: merge`) |
+| strategy | Check                                       | Merged by                            |
+| -------- | ------------------------------------------- | ------------------------------------ |
+| `squash` | success                                     | A human, via "Squash and merge"      |
+| `merge`  | action_required, then success once labelled | squashables (`merge_method: merge`)  |
 | `rebase` | action_required, then success once labelled | squashables (`merge_method: rebase`) |
-| `forbid` | failure (permanent) | Nobody |
+| `forbid` | failure (permanent)                         | Nobody                               |
 
 A strategy listed in `merge.manual` means "a human merges this"; anything else means "the app merges this".
 The default is `[squash]`. If merge commits are your primary strategy, set `manual: [merge]` instead.
@@ -322,16 +322,24 @@ right base branch — changing the base triggers a fresh evaluation — or close
 
 ## Check states
 
-| Situation | conclusion | title |
-| --- | --- | --- |
-| PR that should be squashed | `success` | `Squash merge` |
-| Assisted merge, not labelled yet | `action_required` | `Merge commit required` |
-| Labelled, waiting on CI | `action_required` | `Waiting for other checks` |
-| Labelled, waiting on review | `action_required` | `Waiting for review approval` |
-| Labelled, conflicting | `action_required` | `Cannot merge: conflicts with base` |
-| Assisted merge succeeded | `success` | `Merged by squashables` |
-| Forbidden branch pair | `failure` | `Pull requests into <base> from <head> are not allowed` |
-| Broken configuration | `failure` | `Invalid .github/squashables.yml` |
+| Situation                                          | conclusion        | title                                                   |
+| -------------------------------------------------- | ----------------- | ------------------------------------------------------- |
+| PR that should be squashed                         | `success`         | `Squash merge`                                          |
+| Assisted merge, not labelled yet                   | `action_required` | `Merge commit required`                                 |
+| Labelled, waiting on CI                            | `action_required` | `Waiting for other checks`                              |
+| Labelled, waiting on review                        | `action_required` | `Waiting for review approval`                           |
+| Labelled, conflicting                              | `action_required` | `Cannot merge: conflicts with base`                     |
+| Labelled, changes requested                        | `action_required` | `Cannot merge: changes requested`                       |
+| Labelled, still a draft                            | `action_required` | `Waiting for the pull request to be ready`              |
+| Labelled, mergeability not computed yet            | `action_required` | `Waiting for GitHub to compute mergeability`            |
+| Labelled, behind the base (with `requireUpToDate`) | `action_required` | `Waiting for the branch to be up to date`               |
+| Labelled, the merge API refused                    | `action_required` | `Cannot merge`                                          |
+| Assisted merge succeeded                           | `success`         | `Merged by squashables`                                 |
+| Forbidden branch pair                              | `failure`         | `Pull requests into <base> from <head> are not allowed` |
+| Broken configuration                               | `failure`         | `Invalid .github/squashables.yml`                       |
+
+The first row's title names whichever strategy `merge.manual` lists, so a repository whose humans merge with
+merge commits sees `Merge commit` there instead.
 
 Both `action_required` and `failure` count as failing for a required status check, so either blocks the
 merge. The check is flipped to `success` after an assisted merge so that merged PRs do not carry a red X in
@@ -372,11 +380,11 @@ returns 409, and squashables aborts and re-evaluates — an unreviewed commit ne
 
 ### Repository permissions
 
-| Permission | Level | Used for |
-| --- | --- | --- |
-| Metadata | Read | Mandatory |
-| Checks | Read & write | Creating and updating check runs |
-| Contents | Read & write | Reading the config file, merging |
+| Permission    | Level        | Used for                             |
+| ------------- | ------------ | ------------------------------------ |
+| Metadata      | Read         | Mandatory                            |
+| Checks        | Read & write | Creating and updating check runs     |
+| Contents      | Read & write | Reading the config file, merging     |
 | Pull requests | Read & write | Reading PRs, merging, label handling |
 
 ### Webhook events
@@ -409,8 +417,7 @@ src/
   core/        Pure logic (policy, config, event handling) on web standard APIs only
   adapters/
     github/      GitHub API client
-    cloudflare/  Workers entry point (default)
-    node/        Node.js entry point
+    cloudflare/  Workers entry point
 ```
 
 ### Cloudflare Workers
@@ -436,16 +443,15 @@ The webhook URL is `https://<your-worker>/webhooks/github`. Health check: `GET /
 
 The core needs nothing but these ports. Implement them and it runs anywhere.
 
-| Port | Responsibility | Cloudflare implementation |
-| --- | --- | --- |
-| `Env` | Secrets and settings | Worker `env` bindings |
-| `Deferrer` | Work that continues after the response | `ctx.waitUntil` |
-| `Cache` | Config cache and deduplication (optional) | Workers KV |
-| `Logger` | Structured logging | `console` (JSON) |
-| `Clock` | Current time | `Date` |
+| Port       | Responsibility                            | Cloudflare implementation |
+| ---------- | ----------------------------------------- | ------------------------- |
+| `Env`      | Secrets and settings                      | Worker `env` bindings     |
+| `Deferrer` | Work that continues after the response    | `ctx.waitUntil`           |
+| `Cache`    | Config cache and deduplication (optional) | Workers KV                |
+| `Logger`   | Structured logging                        | `console` (JSON)          |
 
-The entry point is a plain `(request: Request) => Promise<Response>`. On Node.js, a thin `node:http` adapter
-is all it takes.
+The entry point is a plain `(request: Request) => Promise<Response>`, so another runtime needs an entry point
+that hands it a `Request` and the four ports above — nothing in `core/` changes.
 
 ---
 

@@ -1,0 +1,19 @@
+{
+  "action": "completed",
+  "check_run": {
+    "id": 900,
+    "name": "squashables",
+    "head_sha": "c0ffee0000000000000000000000000000000000",
+    "status": "completed",
+    "conclusion": "action_required",
+    "app": { "id": 1234, "slug": "squashables" }
+  },
+  "repository": {
+    "id": 1,
+    "name": "squashables",
+    "full_name": "siketyan/squashables",
+    "default_branch": "main",
+    "owner": { "login": "siketyan", "type": "User" }
+  },
+  "installation": { "id": 42 }
+}

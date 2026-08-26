@@ -1,0 +1,30 @@
+{
+  "action": "opened",
+  "number": 12,
+  "pull_request": {
+    "number": 12,
+    "state": "open",
+    "draft": false,
+    "title": "Promote develop into staging",
+    "head": {
+      "ref": "develop",
+      "sha": "c0ffee0000000000000000000000000000000000",
+      "repo": { "full_name": "siketyan/squashables" }
+    },
+    "base": {
+      "ref": "staging",
+      "sha": "beef000000000000000000000000000000000000",
+      "repo": { "full_name": "siketyan/squashables" }
+    },
+    "labels": []
+  },
+  "repository": {
+    "id": 1,
+    "name": "squashables",
+    "full_name": "siketyan/squashables",
+    "default_branch": "main",
+    "owner": { "login": "siketyan", "type": "User" }
+  },
+  "sender": { "login": "siketyan", "type": "User" },
+  "installation": { "id": 42, "node_id": "MDIzOkludGVncmF0aW9uSW5zdGFsbGF0aW9uNDI=" }
+}
