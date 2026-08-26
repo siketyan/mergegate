@@ -27,6 +27,8 @@ export const pullRequestQuery = /* GraphQL */ `
         headRepository {
           nameWithOwner
         }
+        # 100 labels on one pull request is not a thing, and missing one only
+        # means the label looks absent, which blocks rather than merges.
         labels(first: 100) {
           nodes {
             name
@@ -35,8 +37,13 @@ export const pullRequestQuery = /* GraphQL */ `
         commits(last: 1) {
           nodes {
             commit {
+              oid
               statusCheckRollup {
                 contexts(first: 100) {
+                  pageInfo {
+                    hasNextPage
+                    endCursor
+                  }
                   nodes {
                     __typename
                     ... on CheckRun {
@@ -58,7 +65,45 @@ export const pullRequestQuery = /* GraphQL */ `
   }
 `;
 
+/** The rest of the rollup, when the first page did not hold all of it. */
+export const checkContextsQuery = /* GraphQL */ `
+  query PullRequestCheckContexts(
+    $owner: String!
+    $repo: String!
+    $oid: GitObjectID!
+    $after: String!
+  ) {
+    repository(owner: $owner, name: $repo) {
+      object(oid: $oid) {
+        ... on Commit {
+          statusCheckRollup {
+            contexts(first: 100, after: $after) {
+              pageInfo {
+                hasNextPage
+                endCursor
+              }
+              nodes {
+                __typename
+                ... on CheckRun {
+                  name
+                  status
+                  conclusion
+                }
+                ... on StatusContext {
+                  state
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+`;
+
 type PullRequestNode = NonNullable<PullRequestStateQuery["repository"]>["pullRequest"];
+export type RollupContext = StatusContextNode;
+
 type StatusContextNode = NonNullable<
   NonNullable<
     NonNullable<
@@ -133,9 +178,26 @@ function otherChecks(
   return conclusions;
 }
 
+/** The head commit and the first page of its check rollup. */
+export function rollupPage(response: PullRequestStateQuery): {
+  readonly oid: string | null;
+  readonly hasNextPage: boolean;
+  readonly endCursor: string | null;
+} {
+  const commit = response.repository?.pullRequest?.commits.nodes?.[0]?.commit;
+  const page = commit?.statusCheckRollup?.contexts.pageInfo;
+  return {
+    oid: commit?.oid ?? null,
+    hasNextPage: page?.hasNextPage ?? false,
+    endCursor: page?.endCursor ?? null,
+  };
+}
+
 export function toPullRequestState(
   response: PullRequestStateQuery,
   ownCheckName: string,
+  extraContexts: readonly (StatusContextNode | null)[] = [],
+  checksTruncated = false,
 ): PullRequestState | null {
   const repository = response.repository;
   const pullRequest = repository?.pullRequest;
@@ -148,7 +210,10 @@ export function toPullRequestState(
     return null;
   }
 
-  const contexts = pullRequest.commits.nodes?.[0]?.commit.statusCheckRollup?.contexts.nodes ?? [];
+  const contexts = [
+    ...(pullRequest.commits.nodes?.[0]?.commit.statusCheckRollup?.contexts.nodes ?? []),
+    ...extraContexts,
+  ];
 
   return {
     number: pullRequest.number,
@@ -174,5 +239,6 @@ export function toPullRequestState(
     behindBase: pullRequest.mergeStateStatus === "BEHIND",
     reviewDecision: pullRequest.reviewDecision ?? null,
     otherChecks: otherChecks(contexts, ownCheckName),
+    checksTruncated,
   };
 }

@@ -20,6 +20,8 @@ export interface FakeGitHubState {
   /** Sources whose commits the pull request head is deemed to carry. */
   carriedFrom: string[];
   carriesQueries: { base: string; head: string; source: string }[];
+  /** Consumed one per read, starting with the first, for tests that need the state to change. */
+  nextStates: PullRequestState[];
   mergeOutcome: MergeOutcome;
   ownCheckNames: string[];
 }
@@ -39,6 +41,7 @@ export function pullRequest(overrides: Partial<PullRequestState> = {}): PullRequ
     behindBase: false,
     reviewDecision: "APPROVED",
     otherChecks: ["success"],
+    checksTruncated: false,
     ...overrides,
   };
 }
@@ -57,6 +60,7 @@ export function createFakeGitHub(initial: Partial<FakeGitHubState> = {}): {
     deletedBranches: [],
     carriedFrom: [],
     carriesQueries: [],
+    nextStates: [],
     mergeOutcome: { ok: true, sha: "merged-sha" },
     ownCheckNames: [],
     ...initial,
@@ -66,7 +70,7 @@ export function createFakeGitHub(initial: Partial<FakeGitHubState> = {}): {
     readDefaultBranchFile: async (_repo: RepoRef, _path: string) => state.configSource,
     getPullRequestState: async (_repo, pullNumber, options) => {
       state.ownCheckNames.push(options.ownCheckName);
-      return state.pullRequests.get(pullNumber) ?? null;
+      return state.nextStates.shift() ?? state.pullRequests.get(pullNumber) ?? null;
     },
     upsertCheckRun: async (_repo, input) => {
       state.checkRuns.push(input);
@@ -111,8 +115,9 @@ export const testEnv: Env = {
 export function createTestContext(
   api: GitHubApi,
   overrides: Partial<AppContext> = {},
-): { context: AppContext; flush: () => Promise<void> } {
+): { context: AppContext; flush: () => Promise<void>; slept: number[] } {
   const deferred: Promise<void>[] = [];
+  const slept: number[] = [];
   const context: AppContext = {
     github: { forInstallation: () => api },
     logger: silentLogger,
@@ -121,12 +126,17 @@ export function createTestContext(
         deferred.push(work());
       },
     },
+    sleep: async (milliseconds) => {
+      // Record the backoff instead of living through it.
+      slept.push(milliseconds);
+    },
     env: testEnv,
     ...overrides,
   };
 
   return {
     context,
+    slept,
     flush: async () => {
       await Promise.all(deferred);
     },

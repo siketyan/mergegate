@@ -12,6 +12,7 @@ function input(overrides: Partial<GateInput> = {}): GateInput {
     behindBase: false,
     reviewDecision: "APPROVED",
     otherChecks: ["success"],
+    checksTruncated: false,
     ...overrides,
   };
 }
@@ -89,4 +90,17 @@ test("being behind the base only blocks when it is required", () => {
   expect(evaluateGate(input({ behindBase: true }), { ...settings, requireUpToDate: true })).toEqual(
     { ready: false, reason: "behind-base" },
   );
+});
+
+test("a rollup mergegate could not read to the end blocks the merge", () => {
+  expect(evaluateGate(input({ checksTruncated: true }), settings)).toEqual({
+    ready: false,
+    reason: "checks-unreadable",
+  });
+});
+
+test("an unreadable rollup does not matter when checks are not required", () => {
+  expect(
+    evaluateGate(input({ checksTruncated: true }), { ...settings, requireChecks: false }),
+  ).toEqual({ ready: true });
 });
