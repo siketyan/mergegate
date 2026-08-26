@@ -19,7 +19,10 @@ function matches(config: Config, rule: Rule, refs: PullRequestRefs): boolean {
   if (refs.isFork && !config.merge.allowForkHead && !reachableFromFork(config, rule)) {
     return false;
   }
-  return matchesPattern(rule.base, refs.base) && matchesPattern(rule.head, refs.head);
+  return (
+    matchesPattern(rule.base, refs.base) &&
+    rule.head.some((pattern) => matchesPattern(pattern, refs.head))
+  );
 }
 
 function decideStrategy(config: Config, strategy: Strategy, match: RuleMatch): Decision {

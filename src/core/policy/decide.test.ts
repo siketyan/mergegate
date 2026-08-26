@@ -231,6 +231,69 @@ test("the matched rule is reported back", () => {
   expect(decision.match).toEqual({
     source: "rule",
     index: 0,
-    rule: { base: "staging", head: "develop", strategy: "merge" },
+    rule: { base: "staging", head: ["develop"], strategy: "merge" },
+  });
+});
+
+test("an intermediate branch reaches the rule its source would", () => {
+  // A promotion that conflicts is opened from a branch off the base with the
+  // source merged into it, so the pull request's head is not the source branch.
+  const config = load(`
+version: 1
+rules:
+  - base: staging
+    head: [develop, "merge/develop-*"]
+    strategy: merge
+  - base: "**"
+    strategy: squash
+`);
+
+  for (const head of ["develop", "merge/develop-to-staging", "merge/develop-20260826"]) {
+    expect(decide(config, { base: "staging", head, isFork: false })).toMatchObject({
+      kind: "assisted",
+      strategy: "merge",
+    });
+  }
+
+  // Still only for that base: the same branch elsewhere is an ordinary feature.
+  expect(
+    decide(config, { base: "develop", head: "merge/develop-to-staging", isFork: false }),
+  ).toMatchObject({ kind: "manual", strategy: "squash" });
+});
+
+test("an intermediate branch is still refused by a forbidding rule", () => {
+  const config = load(`
+version: 1
+rules:
+  - base: production
+    head: [staging, "merge/staging-*"]
+    strategy: merge
+  - base: production
+    strategy: forbid
+  - base: "**"
+    strategy: squash
+`);
+  expect(
+    decide(config, { base: "production", head: "merge/staging-x", isFork: false }),
+  ).toMatchObject({ kind: "assisted", strategy: "merge" });
+  // Not every merge/* branch: only the ones the rule lists.
+  expect(
+    decide(config, { base: "production", head: "merge/develop-x", isFork: false }),
+  ).toMatchObject({ kind: "forbidden" });
+});
+
+test("a fork cannot reach an assisted rule through an intermediate branch name", () => {
+  const config = load(`
+version: 1
+rules:
+  - base: staging
+    head: [develop, "merge/*"]
+    strategy: merge
+  - base: "**"
+    strategy: squash
+`);
+  expect(decide(config, { base: "staging", head: "merge/anything", isFork: true })).toMatchObject({
+    kind: "manual",
+    strategy: "squash",
   });
 });

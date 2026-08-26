@@ -2,6 +2,16 @@ import * as v from "valibot";
 
 const branchPattern = v.pipe(v.string(), v.minLength(1, "must be a non-empty branch pattern"));
 
+/**
+ * One pattern or several. A promotion is often opened from an intermediate
+ * branch — `develop` merged into a branch off `staging` so the conflicts can be
+ * resolved there — and that branch has to reach the same rule its source would.
+ */
+const branchPatterns = v.pipe(
+  v.union([branchPattern, v.pipe(v.array(branchPattern), v.minLength(1, "must list a pattern"))]),
+  v.transform((value) => (typeof value === "string" ? [value] : value)),
+);
+
 /** A strategy a pull request can actually be merged with. */
 export const strategySchema = v.picklist(["squash", "merge", "rebase"]);
 
@@ -10,7 +20,7 @@ export const ruleStrategySchema = v.picklist(["squash", "merge", "rebase", "forb
 
 export const ruleSchema = v.strictObject({
   base: branchPattern,
-  head: v.optional(branchPattern, "**"),
+  head: v.optional(branchPatterns, "**"),
   strategy: ruleStrategySchema,
 });
 

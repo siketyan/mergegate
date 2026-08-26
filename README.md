@@ -198,13 +198,14 @@ rewrite the rules that govern it.
 version: 1
 
 rules:
-  # Promotion PRs use merge commits
+  # Promotion PRs use merge commits. The second pattern is the intermediate
+  # branch a conflicting promotion is opened from; see below.
   - base: staging
-    head: develop
+    head: [develop, "merge/develop-*"]
     strategy: merge
 
   - base: production
-    head: staging
+    head: [staging, "merge/staging-*"]
     strategy: merge
 
   # Emergency fixes may go in directly, squashed
@@ -246,6 +247,32 @@ rules:
 
 Note how `base: main` resolves differently depending on the head branch — the part a ruleset cannot express.
 
+### Promotions that conflict
+
+When a promotion conflicts, the fix is usually a branch off the base with the source merged into it, so the
+conflicts are resolved and reviewed there rather than on either long-lived branch:
+
+```console
+$ git switch -c merge/develop-to-staging staging
+$ git merge develop      # resolve the conflicts here
+$ git push -u origin merge/develop-to-staging
+```
+
+That pull request's head is `merge/develop-to-staging`, not `develop`, so it would miss the promotion rule
+and be treated as an ordinary feature branch — squashed, flattening the very merge commit that resolves the
+conflict. List the intermediate branch alongside the source:
+
+```yaml
+- base: staging
+  head: [develop, "merge/develop-*"]
+  strategy: merge
+```
+
+A rule matches when **any** of its head patterns matches, so the promotion and the branch standing in for it
+take the same route. Naming the pattern per promotion (`merge/develop-*` rather than `merge/*`) keeps an
+intermediate branch from reaching a rule it was not meant for; anything matching no rule still falls through
+to `defaults.strategy`, and a `forbid` rule still refuses it.
+
 ### Reference
 
 ```yaml
@@ -271,7 +298,7 @@ merge:
 
 rules:
   - base: staging # Required. Pattern for the base branch
-    head: develop # Defaults to "**"
+    head: develop # A pattern, or a list of them. Defaults to "**"
     strategy: merge # squash | merge | rebase | forbid
 ```
 
@@ -280,6 +307,8 @@ rules:
 - **Rules are evaluated top to bottom and the first match wins.** Put specific rules first.
 - If nothing matches, `defaults.strategy` applies.
 - Patterns are globs: `*` matches any run of characters except `/`, `**` matches any run including `/`.
+- `head` takes one pattern or a list of them; a rule matches when any of them matches. See
+  [Promotions that conflict](#promotions-that-conflict).
 - `head` is matched against the branch name (`head.ref`). While `merge.allowForkHead` is `false`, PRs from
   forks never match a non-`squash` rule, so nobody can get promotion treatment by naming a branch `develop`
   in their fork.
