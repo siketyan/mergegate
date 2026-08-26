@@ -6,12 +6,12 @@ import {
   createTestContext,
   pullRequest,
   testEnv,
-} from "../../../test/fake-github.ts";
+} from "../../test/fake-github.ts";
 import type { Cache } from "../ports.ts";
 import { handleDelivery } from "./index.ts";
 
 async function fixture(name: string): Promise<Record<string, unknown>> {
-  const path = fileURLToPath(new URL(`../../../test/fixtures/${name}.json`, import.meta.url));
+  const path = fileURLToPath(new URL(`../../test/fixtures/${name}.json`, import.meta.url));
   return JSON.parse(await readFile(path, "utf8")) as Record<string, unknown>;
 }
 

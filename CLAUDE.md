@@ -46,17 +46,18 @@ $ wrangler deploy     # Deploy
 
 ## Layout and direction of dependencies
 
+Everything under `src/` except `adapters/` is the core: runtime-agnostic, web standard APIs only.
+
 ```
 src/
-  core/                    # Runtime-agnostic. Web standard APIs only
-    config/                # Parsing and validation of .github/mergegate.yml
-    policy/                # (base, head, config) -> Decision, pure functions. The heart of the app
-    check/                 # Building check run output (title / summary)
-    handlers/              # Per-event webhook handling, talking to GitHub through ports
-    policy/gate.ts         # Merge readiness: the gates GitHub would apply if we did not bypass it
-    ports.ts               # GitHubApi, Env, Cache, Logger, Deferrer interfaces
-    webhook.ts             # Signature verification and dispatch. (Request) => Promise<Response>
-  adapters/
+  config/                  # Parsing and validation of .github/mergegate.yml
+  policy/                  # (base, head, config) -> Decision, pure functions. The heart of the app
+  policy/gate.ts           # Merge readiness: the gates GitHub would apply if we did not bypass it
+  check/                   # Building check run output (title / summary)
+  handlers/                # Per-event webhook handling, talking to GitHub through ports
+  ports.ts                 # GitHubApi, Env, Cache, Logger, Deferrer interfaces
+  webhook.ts               # Signature verification and dispatch. (Request) => Promise<Response>
+  adapters/                # The only place a runtime or a vendor SDK may be named
     github/                # GitHubApi implementation over Octokit (REST + GraphQL)
     github/generated/      # graphql-codegen output. Never edit by hand
     cloudflare/            # Workers entry: env bindings, ctx.waitUntil, KV
@@ -88,12 +89,13 @@ serving the JSON Schema costs no invocations.
 
 **Dependencies always point `adapters -> core`.**
 
-- Never import from `adapters` inside `core`.
-- Never import `node:*` inside `core`, and never touch `process.env` (everything goes through the `Env` port).
-- `core` may only use web standard APIs (`fetch`, `crypto.subtle`, `URL`, `TextEncoder`, …).
+- Never import from `adapters` inside core.
+- Never import `node:*` inside core, and never touch `process.env` (everything goes through the `Env` port).
+- Core may only use web standard APIs (`fetch`, `crypto.subtle`, `URL`, `TextEncoder`, …).
 - Adding a new runtime must only require changes under `adapters/`.
-- The first two rules are enforced by `no-restricted-imports` in `vite.config.ts`, so `vp check` catches
-  them; `test/architecture.test.ts` covers what a lint rule cannot see.
+- The first two rules are enforced by `no-restricted-imports` in `vite.config.ts`, which sets them for all
+  of `src/` and takes them off `src/adapters/`, so `vp check` catches them;
+  `test/architecture.test.ts` covers what a lint rule cannot see.
 
 ## Invariants
 
@@ -123,11 +125,11 @@ These map directly onto promises the README makes to users. Do not break them.
 
 ## Testing policy
 
-- **`core/policy` comes first.** Table-driven tests over `(config, base, head)` -> `Decision`. The
+- **`policy/` comes first.** Table-driven tests over `(config, base, head)` -> `Decision`. The
   configuration examples in the README (develop/staging/production and main/release) become test cases
   verbatim.
-- Test `core/config` for both valid input and failures: unknown keys, version mismatch, malformed globs.
-- Test `core/handlers` against an in-memory fake `GitHubApi`. No network.
+- Test `config/` for both valid input and failures: unknown keys, version mismatch, malformed globs.
+- Test `handlers/` against an in-memory fake `GitHubApi`. No network.
 - Test signature verification with fixed vectors.
 - Keep real webhook payloads under `test/fixtures/` and use them typed.
 - **Tests that need workerd stay in `adapters/cloudflare`.** Core tests run in a plain Node environment.
@@ -173,8 +175,8 @@ These map directly onto promises the README makes to users. Do not break them.
 
 ## Do not
 
-- Leak Cloudflare-specific types (`ExecutionContext`, `KVNamespace`, …) into `core`.
-- Inline decision logic into webhook handlers; it belongs in the pure functions under `core/policy`.
-- Bolt runtime-dependent arguments onto `core` functions for testing. Add a port instead.
+- Leak Cloudflare-specific types (`ExecutionContext`, `KVNamespace`, …) into core.
+- Inline decision logic into webhook handlers; it belongs in the pure functions under `policy/`.
+- Bolt runtime-dependent arguments onto core functions for testing. Add a port instead.
 - Log secrets (app private key, webhook secret, tokens).
 - Swallow a failure and report the check as success.

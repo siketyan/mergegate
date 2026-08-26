@@ -1,5 +1,5 @@
 import { expect, test } from "vite-plus/test";
-import { createFakeGitHub, createTestContext, pullRequest } from "../../test/fake-github.ts";
+import { createFakeGitHub, createTestContext, pullRequest } from "../test/fake-github.ts";
 import { createWebhookHandler, verifySignature } from "./webhook.ts";
 
 // The example from GitHub's own webhook documentation.

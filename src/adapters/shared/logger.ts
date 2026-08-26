@@ -1,4 +1,4 @@
-import type { Logger } from "../../core/ports.ts";
+import type { Logger } from "../../ports.ts";
 
 type Level = "debug" | "info" | "warn" | "error";
 

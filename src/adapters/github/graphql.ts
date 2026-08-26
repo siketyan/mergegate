@@ -1,5 +1,5 @@
-import type { CheckConclusion } from "../../core/policy/gate.ts";
-import type { PullRequestState } from "../../core/ports.ts";
+import type { CheckConclusion } from "../../policy/gate.ts";
+import type { PullRequestState } from "../../ports.ts";
 import type { PullRequestStateQuery, RollupContextFragment } from "./generated/graphql.ts";
 
 /**

@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { toJsonSchema } from "@valibot/to-json-schema";
-import { configSchema } from "../src/core/config/schema.ts";
+import { configSchema } from "../src/config/schema.ts";
 
 /**
  * The JSON Schema is generated from the valibot schema rather than written by

@@ -12,14 +12,18 @@ import { describe, expect, test } from "vite-plus/test";
  * What is left here is what an import rule cannot see.
  */
 
-const core = fileURLToPath(new URL("../src/core", import.meta.url));
+const source = fileURLToPath(new URL("../src", import.meta.url));
 
+/** Everything under `src/` that is not an adapter: the runtime-agnostic half. */
 async function coreSources(): Promise<{ name: string; source: string }[]> {
-  const names = await readdir(core, { recursive: true });
+  const names = await readdir(source, { recursive: true });
   return Promise.all(
     names
-      .filter((name) => name.endsWith(".ts") && !name.endsWith(".test.ts"))
-      .map(async (name) => ({ name, source: await readFile(join(core, name), "utf8") })),
+      .filter(
+        (name) =>
+          name.endsWith(".ts") && !name.endsWith(".test.ts") && !name.startsWith("adapters/"),
+      )
+      .map(async (name) => ({ name, source: await readFile(join(source, name), "utf8") })),
   );
 }
 

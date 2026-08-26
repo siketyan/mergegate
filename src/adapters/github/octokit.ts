@@ -13,7 +13,7 @@ import type {
   MergeOutcome,
   PullRequestState,
   RepoRef,
-} from "../../core/ports.ts";
+} from "../../ports.ts";
 import { decodeContent } from "./content.ts";
 import type {
   PullRequestCheckContextsQuery,

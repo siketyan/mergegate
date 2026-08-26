@@ -5,7 +5,7 @@ import {
   type FakeGitHubState,
   pullRequest,
   repo,
-} from "../../../test/fake-github.ts";
+} from "../../test/fake-github.ts";
 import type { PullRequestState } from "../ports.ts";
 import { type EvaluateOptions, evaluatePullRequest } from "./evaluate.ts";
 
