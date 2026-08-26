@@ -98,6 +98,15 @@ export interface GitHubApi {
   ): Promise<PullRequestState | null>;
   /** Updates the existing check run for `(name, headSha)`, or creates one. */
   upsertCheckRun(repo: RepoRef, input: CheckRunInput): Promise<void>;
+  /**
+   * Whether the pull request brings commits from `source` that `base` does not
+   * already have: "is this a promotion of source" asked of the history rather
+   * than of the branch's name.
+   */
+  carriesCommitsFrom(
+    repo: RepoRef,
+    input: { readonly base: string; readonly head: string; readonly source: string },
+  ): Promise<boolean>;
   /** `check_suite.pull_requests` is empty for forks, so this is the fallback. */
   findPullRequestsForSha(repo: RepoRef, sha: string): Promise<readonly number[]>;
   mergePullRequest(repo: RepoRef, pullNumber: number, input: MergeInput): Promise<MergeOutcome>;

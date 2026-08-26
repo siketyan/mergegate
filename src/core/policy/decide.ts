@@ -1,5 +1,5 @@
 import type { Config, Rule, Strategy } from "../config/schema.ts";
-import { matchesPattern } from "./glob.ts";
+import { isLiteral, matchesPattern } from "./glob.ts";
 import type { Decision, PullRequestRefs, RuleMatch } from "./types.ts";
 
 function isManual(config: Config, strategy: Strategy): boolean {
@@ -19,7 +19,21 @@ function matches(config: Config, rule: Rule, refs: PullRequestRefs): boolean {
   if (refs.isFork && !config.merge.allowForkHead && !reachableFromFork(config, rule)) {
     return false;
   }
-  return matchesPattern(rule.base, refs.base) && matchesPattern(rule.head, refs.head);
+  if (!matchesPattern(rule.base, refs.base)) {
+    return false;
+  }
+  if (rule.head.some((pattern) => matchesPattern(pattern, refs.head))) {
+    return true;
+  }
+  // A promotion that had to go through an intermediate branch does not carry the
+  // source branch's name, so the rule can be told to look at what the pull
+  // request brings with it instead.
+  const carriedFrom = refs.carriedFrom;
+  return (
+    rule.includeTransitive === true &&
+    carriedFrom !== undefined &&
+    rule.head.some((pattern) => isLiteral(pattern) && carriedFrom.has(pattern))
+  );
 }
 
 function decideStrategy(config: Config, strategy: Strategy, match: RuleMatch): Decision {

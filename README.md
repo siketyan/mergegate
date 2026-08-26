@@ -198,13 +198,16 @@ rewrite the rules that govern it.
 version: 1
 
 rules:
-  # Promotion PRs use merge commits
+  # Promotion PRs use merge commits. includeTransitive also catches a promotion
+  # opened from an intermediate branch after a conflict; see below.
   - base: staging
     head: develop
+    includeTransitive: true
     strategy: merge
 
   - base: production
     head: staging
+    includeTransitive: true
     strategy: merge
 
   # Emergency fixes may go in directly, squashed
@@ -246,6 +249,64 @@ rules:
 
 Note how `base: main` resolves differently depending on the head branch — the part a ruleset cannot express.
 
+### Promotions that conflict
+
+When a promotion conflicts, the fix is usually a branch off the base with the source merged into it, so the
+conflicts are resolved and reviewed there rather than on either long-lived branch:
+
+```console
+$ git switch -c merge/develop-to-staging staging
+$ git merge develop      # resolve the conflicts here
+$ git push -u origin merge/develop-to-staging
+```
+
+That pull request's head is `merge/develop-to-staging`, not `develop`, so it would miss the promotion rule
+and be treated as an ordinary feature branch — squashed, flattening the very merge commit that resolves the
+conflict. There are two ways to catch it.
+
+#### By what the pull request carries
+
+`includeTransitive: true` matches the rule against any branch that brings commits from `develop` which
+`staging` does not already have, whatever that branch is called:
+
+```yaml
+- base: staging
+  head: develop
+  includeTransitive: true
+  strategy: merge
+```
+
+This asks the history instead of trusting a naming convention, so a branch named `wip`, `fix-conflicts` or
+anything else is caught just the same. What it compares is where the base and the source last agreed against
+how much of the source the head has — not the source's tip — so the answer does not change when someone
+pushes to `develop` while the pull request is open.
+
+It costs two or three comparisons against the GitHub API per evaluation, and only for rules that opt in:
+a configuration without `includeTransitive` makes no extra calls at all. The head branch of the rule has to
+name a branch (`develop`), not only a pattern — there is no history to follow from `release/*`.
+
+One consequence worth knowing: a feature branch cut from `develop` and pointed at `staging` also carries
+develop's commits, so it matches too. That is the honest answer rather than an accident — merging it does
+bring develop's history into staging, and squashing it would flatten exactly the same thing.
+
+#### By name
+
+`head` also takes a list of patterns, and a rule matches when any of them matches:
+
+```yaml
+- base: staging
+  head: [develop, "merge/develop-*"]
+  strategy: merge
+```
+
+No API calls, but only as reliable as the convention: a branch named something else falls through to
+`defaults.strategy` — the direction that squashes a promotion. Naming the pattern per promotion
+(`merge/develop-*` rather than `merge/*`) at least keeps an intermediate branch from reaching a rule it was
+not meant for.
+
+Either way the guard rails hold: a `forbid` rule still refuses what no rule matches, and a fork head still
+cannot reach an assisted rule — by name or by what it carries.
+
 ### Reference
 
 ```yaml
@@ -271,8 +332,9 @@ merge:
 
 rules:
   - base: staging # Required. Pattern for the base branch
-    head: develop # Defaults to "**"
+    head: develop # A pattern, or a list of them. Defaults to "**"
     strategy: merge # squash | merge | rebase | forbid
+    includeTransitive: false # Also match branches carrying commits from head
 ```
 
 #### How rules are evaluated
@@ -280,6 +342,9 @@ rules:
 - **Rules are evaluated top to bottom and the first match wins.** Put specific rules first.
 - If nothing matches, `defaults.strategy` applies.
 - Patterns are globs: `*` matches any run of characters except `/`, `**` matches any run including `/`.
+- `head` takes one pattern or a list of them; a rule matches when any of them matches. With
+  `includeTransitive: true` it also matches a branch carrying commits from one of them. See
+  [Promotions that conflict](#promotions-that-conflict).
 - `head` is matched against the branch name (`head.ref`). While `merge.allowForkHead` is `false`, PRs from
   forks never match a non-`squash` rule, so nobody can get promotion treatment by naming a branch `develop`
   in their fork.

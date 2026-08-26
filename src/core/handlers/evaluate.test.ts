@@ -128,3 +128,48 @@ test("a closed pull request is left alone", async () => {
   const state = await run({}, { state: "closed" });
   expect(state.checkRuns).toHaveLength(0);
 });
+
+const TRANSITIVE_CONFIG = `
+version: 1
+rules:
+  - base: staging
+    head: develop
+    includeTransitive: true
+    strategy: merge
+  - base: "**"
+    strategy: squash
+`;
+
+test("a branch carrying the source is treated as the promotion it is", async () => {
+  const state = await run(
+    { configSource: TRANSITIVE_CONFIG, carriedFrom: ["develop"] },
+    { head: "resolve-the-conflicts" },
+  );
+
+  expect(state.carriesQueries).toEqual([
+    { base: "staging", head: "resolve-the-conflicts", source: "develop" },
+  ]);
+  expect(state.checkRuns[0]).toMatchObject({
+    conclusion: "action_required",
+    title: "Merge commit required",
+  });
+});
+
+test("a branch carrying nothing from the source is an ordinary feature", async () => {
+  const state = await run(
+    { configSource: TRANSITIVE_CONFIG, carriedFrom: [] },
+    { head: "just-a-feature" },
+  );
+  expect(state.checkRuns[0]).toMatchObject({ conclusion: "success", title: "Squash merge" });
+});
+
+test("a head that already matches by name is never looked up", async () => {
+  const state = await run({ configSource: TRANSITIVE_CONFIG, carriedFrom: ["develop"] });
+  expect(state.carriesQueries).toEqual([]);
+  expect(state.checkRuns[0]).toMatchObject({ title: "Merge commit required" });
+});
+
+test("a configuration without includeTransitive costs no lookups", async () => {
+  const state = await run({}, { head: "resolve-the-conflicts" });
+  expect(state.carriesQueries).toEqual([]);
+});

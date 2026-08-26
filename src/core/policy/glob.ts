@@ -28,3 +28,8 @@ export function compilePattern(pattern: string): RegExp {
 export function matchesPattern(pattern: string, branch: string): boolean {
   return compilePattern(pattern).test(branch);
 }
+
+/** A pattern with no wildcards names exactly one branch. */
+export function isLiteral(pattern: string): boolean {
+  return !/[*?]/.test(pattern);
+}

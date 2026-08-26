@@ -47,8 +47,69 @@ test("head defaults to matching every branch", () => {
   const result = parseConfig("version: 1\nrules:\n  - base: staging\n    strategy: merge\n");
   expect(result).toMatchObject({ ok: true });
   if (result.ok) {
-    expect(result.config.rules[0]).toEqual({ base: "staging", head: "**", strategy: "merge" });
+    expect(result.config.rules[0]).toEqual({
+      base: "staging",
+      head: ["**"],
+      strategy: "merge",
+      includeTransitive: false,
+    });
   }
+});
+
+test("head accepts several patterns, and one is normalised to a list", () => {
+  const result = parseConfig(`
+version: 1
+rules:
+  - base: staging
+    head: [develop, "merge/develop-*"]
+    strategy: merge
+  - base: production
+    head: staging
+    strategy: merge
+`);
+  expect(result).toMatchObject({ ok: true });
+  if (result.ok) {
+    expect(result.config.rules[0]?.head).toEqual(["develop", "merge/develop-*"]);
+    expect(result.config.rules[1]?.head).toEqual(["staging"]);
+  }
+});
+
+test("includeTransitive defaults to off and needs a branch to follow", () => {
+  const ok = parseConfig(`
+version: 1
+rules:
+  - base: staging
+    head: [develop, "merge/*"]
+    includeTransitive: true
+    strategy: merge
+`);
+  expect(ok).toMatchObject({ ok: true });
+  if (ok.ok) {
+    expect(ok.config.rules[0]?.includeTransitive).toBe(true);
+  }
+
+  expect(parseConfig("version: 1\nrules:\n  - base: staging\n    strategy: merge\n")).toMatchObject(
+    { ok: true },
+  );
+
+  // Only patterns: there is no branch whose commits could be followed.
+  expect(
+    errorsOf(`
+version: 1
+rules:
+  - base: staging
+    head: "merge/*"
+    includeTransitive: true
+    strategy: merge
+`).join(" "),
+  ).toContain("includeTransitive");
+});
+
+test("an empty list of head patterns is rejected", () => {
+  // It would match nothing, which is a rule that silently does not apply.
+  expect(
+    errorsOf("version: 1\nrules:\n  - base: staging\n    head: []\n    strategy: merge\n"),
+  ).not.toHaveLength(0);
 });
 
 test("a missing version is rejected", () => {

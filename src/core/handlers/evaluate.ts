@@ -2,6 +2,7 @@ import { renderCheck } from "../check/render.ts";
 import type { CheckState } from "../check/render.ts";
 import { type Config, FALLBACK_CHECK_NAME, type Strategy } from "../config/schema.ts";
 import { decide } from "../policy/decide.ts";
+import { isLiteral, matchesPattern } from "../policy/glob.ts";
 import { evaluateGate } from "../policy/gate.ts";
 import type { AppContext, GitHubApi, MergeOutcome, PullRequestState, RepoRef } from "../ports.ts";
 import { loadConfig } from "./config.ts";
@@ -93,6 +94,45 @@ async function runAssistedMerge(
 }
 
 /**
+ * Ask GitHub which of the configured source branches this pull request actually
+ * brings commits from. Only rules that opted in are looked up, and only their
+ * literal head branches, so a configuration without `includeTransitive` costs
+ * nothing.
+ */
+async function resolveCarriedFrom(
+  api: GitHubApi,
+  repo: RepoRef,
+  config: Config,
+  pullRequest: PullRequestState,
+): Promise<ReadonlySet<string>> {
+  const sources = new Set<string>();
+  for (const rule of config.rules) {
+    if (!rule.includeTransitive || !matchesPattern(rule.base, pullRequest.base)) {
+      continue;
+    }
+    for (const pattern of rule.head) {
+      // A head that already matches by name needs no lookup.
+      if (isLiteral(pattern) && pattern !== pullRequest.head) {
+        sources.add(pattern);
+      }
+    }
+  }
+
+  const carried = new Set<string>();
+  for (const source of sources) {
+    const carries = await api.carriesCommitsFrom(repo, {
+      base: pullRequest.base,
+      head: pullRequest.head,
+      source,
+    });
+    if (carries) {
+      carried.add(source);
+    }
+  }
+  return carried;
+}
+
+/**
  * Decide what a pull request is allowed to do, say so in the check run, and
  * merge it when it is an assisted merge that has cleared every gate.
  */
@@ -126,6 +166,7 @@ export async function evaluatePullRequest(
     base: pullRequest.base,
     head: pullRequest.head,
     isFork: pullRequest.isFork,
+    carriedFrom: await resolveCarriedFrom(api, repo, config, pullRequest),
   });
 
   switch (decision.kind) {
