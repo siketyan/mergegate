@@ -7,7 +7,7 @@ import {
   repo,
 } from "../../../test/fake-github.ts";
 import type { PullRequestState } from "../ports.ts";
-import { evaluatePullRequest } from "./evaluate.ts";
+import { type EvaluateOptions, evaluatePullRequest } from "./evaluate.ts";
 
 const CONFIG = `
 version: 1
@@ -24,13 +24,15 @@ rules:
 async function run(
   state: Partial<FakeGitHubState>,
   overrides: Partial<PullRequestState> = {},
+  options: EvaluateOptions = {},
 ): Promise<FakeGitHubState> {
-  return (await runWithContext(state, overrides)).state;
+  return (await runWithContext(state, overrides, options)).state;
 }
 
 async function runWithContext(
   state: Partial<FakeGitHubState>,
   overrides: Partial<PullRequestState> = {},
+  options: EvaluateOptions = {},
 ): Promise<{ state: FakeGitHubState; slept: number[] }> {
   const pull = pullRequest(overrides);
   const { api, state: fake } = createFakeGitHub({
@@ -39,9 +41,14 @@ async function runWithContext(
     ...state,
   });
   const { context, slept } = createTestContext(api);
-  await evaluatePullRequest(context, api, repo, pull.number);
+  await evaluatePullRequest(context, api, repo, pull.number, options);
   return { state: fake, slept };
 }
+
+/** A press of the button on the commit the pull request is actually at. */
+const PRESSED: EvaluateOptions = {
+  mergeRequest: { headSha: "c0ffee", actor: "maintainer" },
+};
 
 test("a squash pull request only gets a passing check", async () => {
   const state = await run({}, { base: "develop", head: "feature/login" });
@@ -179,6 +186,117 @@ test("a head that already matches by name is never looked up", async () => {
 test("a configuration without includeTransitive costs no lookups", async () => {
   const state = await run({}, { head: "resolve-the-conflicts" });
   expect(state.carriesQueries).toEqual([]);
+});
+
+test("the button offered on an unlabelled pull request names the strategy", async () => {
+  const state = await run({});
+  expect(state.checkRuns[0]?.actions).toEqual([
+    { label: "Merge now", description: "Merge with a merge commit", identifier: "merge" },
+  ]);
+});
+
+test("a press of the button merges without the label", async () => {
+  const state = await run({}, {}, PRESSED);
+  expect(state.permissionQueries).toEqual(["maintainer"]);
+  expect(state.merges).toEqual([
+    {
+      pullNumber: 12,
+      input: {
+        method: "merge",
+        sha: "c0ffee",
+        commitTitle: "Merge develop into staging (#12)",
+        commitMessage: "",
+      },
+    },
+  ]);
+  expect(state.checkRuns.at(-1)).toMatchObject({
+    conclusion: "success",
+    title: "Merged by mergegate",
+  });
+});
+
+test("a press that cannot merge yet says so and keeps the button", async () => {
+  const state = await run({}, { otherChecks: ["pending"] }, PRESSED);
+  expect(state.merges).toHaveLength(0);
+  const check = state.checkRuns.at(-1);
+  expect(check).toMatchObject({
+    conclusion: "action_required",
+    title: "Waiting for other checks",
+  });
+  // The press left nothing behind, so the check must not promise a merge.
+  expect(check?.summary).toContain("Add the `ready-to-merge` label");
+  expect(check?.summary).toContain("Merge now");
+  expect(check?.actions).toHaveLength(1);
+});
+
+test("a labelled pull request that is not ready is the one mergegate comes back to", async () => {
+  const state = await run({}, { labels: ["ready-to-merge"], otherChecks: ["pending"] });
+  const check = state.checkRuns.at(-1);
+  expect(check?.summary).toContain("mergegate merges as soon as that clears");
+  // Nothing to press: the label already is the standing instruction.
+  expect(check?.actions).toEqual([]);
+});
+
+test("a press from someone who cannot push is refused", async () => {
+  const state = await run({ pushers: [] }, {}, PRESSED);
+  expect(state.permissionQueries).toEqual(["maintainer"]);
+  expect(state.merges).toHaveLength(0);
+  expect(state.checkRuns[0]).toMatchObject({ title: "Merge commit required" });
+});
+
+test("a press belonging to a commit that is no longer the head is ignored", async () => {
+  const state = await run(
+    {},
+    {},
+    {
+      mergeRequest: { headSha: "beef", actor: "maintainer" },
+    },
+  );
+  // The permission is never even asked for: the press is not about this commit.
+  expect(state.permissionQueries).toEqual([]);
+  expect(state.merges).toHaveLength(0);
+  expect(state.checkRuns[0]).toMatchObject({ title: "Merge commit required" });
+});
+
+const NO_ACTION_CONFIG = `
+version: 1
+merge:
+  allowCheckAction: false
+rules:
+  - base: staging
+    head: develop
+    strategy: merge
+`;
+
+test("allowCheckAction: false takes the button away and stops honouring it", async () => {
+  const state = await run({ configSource: NO_ACTION_CONFIG }, {}, PRESSED);
+  expect(state.checkRuns[0]).toMatchObject({
+    title: "Merge commit required",
+    actions: [],
+  });
+  expect(state.permissionQueries).toEqual([]);
+  expect(state.merges).toHaveLength(0);
+});
+
+test("a press that hits a permanent failure has no label to drop, so it keeps the button", async () => {
+  const state = await run(
+    { mergeOutcome: { ok: false, kind: "conflict", message: "Merge conflict" } },
+    {},
+    PRESSED,
+  );
+  expect(state.removedLabels).toEqual([]);
+  expect(state.checkRuns.at(-1)).toMatchObject({
+    title: "Cannot merge",
+    actions: [
+      { label: "Merge now", description: "Merge with a merge commit", identifier: "merge" },
+    ],
+  });
+});
+
+test("the label wins over the button, so the permission is never looked up", async () => {
+  const state = await run({}, { labels: ["ready-to-merge"] }, PRESSED);
+  expect(state.permissionQueries).toEqual([]);
+  expect(state.merges).toHaveLength(1);
 });
 
 const LABELLED = { labels: ["ready-to-merge"] };

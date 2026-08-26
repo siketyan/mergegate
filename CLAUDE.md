@@ -91,12 +91,16 @@ These map directly onto promises the README makes to users. Do not break them.
    an ambiguous case through.
 3. **Upsert check runs.** Never create a duplicate check run for the same `(name, head_sha)`: look up the
    existing one and update it, create only if absent.
-4. **Ignore our own events.** Return early from `check_run` / `check_suite` events produced by this app, to
-   avoid infinite loops.
+4. **Ignore our own results.** Return early from a `check_run` / `check_suite` **completion** produced by
+   this app, to avoid infinite loops. `rerequested` and `requested_action` are the opposite: GitHub sends
+   them only to the app owning the check run, so handle them precisely when the app _is_ ours.
 5. **Pass the head SHA when merging.** Always send `sha` to `PUT /pulls/{n}/merge` with the SHA that was
    evaluated. On 409, abort and re-evaluate — unreviewed commits must never be merged.
 6. **The label is not a sufficient condition.** Re-verify mergeability, other checks and `reviewDecision`
    before every assisted merge; the app bypasses the ruleset, so GitHub's own gates do not apply.
+   The `Merge now` check run action goes through the same gates, plus a write-access check on whoever
+   pressed it and a head SHA that still matches the check run the button was on. It merges or it reports
+   why it cannot; it never writes a label, because the label is the user's instruction, not the app's.
 7. **Never process a request that fails signature verification.** Compare in constant time.
 8. **Respond 202 immediately and continue the work through the `Deferrer` port**, to stay inside GitHub's
    10-second webhook timeout.
@@ -133,6 +137,8 @@ These map directly onto promises the README makes to users. Do not break them.
 - `pull_requests` in `check_suite.completed` is empty for PRs from forks. Fall back to
   `GET /repos/{owner}/{repo}/commits/{sha}/pulls`.
 - Use GraphQL `reviewDecision` for review state instead of recounting reviews over REST.
+- Check run `actions` are capped at three per run, with a 20 character label, a 40 character description and
+  a 20 character identifier. Send the list on every upsert: it replaces, so omitting it leaves a stale button.
 - REST goes through the typed wrappers (`octokit.rest.checks.create`, …), never raw `octokit.request`.
 - GraphQL responses are typed by graphql-codegen from GitHub's published schema, so a query and its types
   cannot drift. Edit the query, then run `vp run codegen`.

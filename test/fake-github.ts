@@ -24,6 +24,9 @@ export interface FakeGitHubState {
   nextStates: PullRequestState[];
   mergeOutcome: MergeOutcome;
   ownCheckNames: string[];
+  /** Logins that may push. Anyone else is refused, as in a real repository. */
+  pushers: string[];
+  permissionQueries: string[];
 }
 
 export function pullRequest(overrides: Partial<PullRequestState> = {}): PullRequestState {
@@ -63,6 +66,8 @@ export function createFakeGitHub(initial: Partial<FakeGitHubState> = {}): {
     nextStates: [],
     mergeOutcome: { ok: true, sha: "merged-sha" },
     ownCheckNames: [],
+    pushers: ["maintainer"],
+    permissionQueries: [],
     ...initial,
   };
 
@@ -86,6 +91,10 @@ export function createFakeGitHub(initial: Partial<FakeGitHubState> = {}): {
     },
     removeLabel: async (_repo, pullNumber, label) => {
       state.removedLabels.push({ pullNumber, label });
+    },
+    canPush: async (_repo, login) => {
+      state.permissionQueries.push(login);
+      return state.pushers.includes(login);
     },
     deleteBranch: async (_repo, branch) => {
       state.deletedBranches.push(branch);

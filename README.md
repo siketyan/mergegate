@@ -11,7 +11,8 @@ long-lived branches.
 
 mergegate decides which merge strategy a PR is allowed to use from its `(base, head)` pair. PRs that
 must not be squashed get a failing check, which **blocks the merge button entirely**. When such a PR is
-ready, add the `ready-to-merge` label and **the app merges it for you** with the correct strategy.
+ready, add the `ready-to-merge` label — or press **Merge now** on the check itself — and **the app merges
+it for you** with the correct strategy.
 
 ---
 
@@ -91,10 +92,11 @@ flowchart TD
     C -->|"strategy: squash"| D["Check: success<br/>a human squash merges"]
     C -->|"strategy: merge / rebase"| E["Check: action_required<br/>merging is blocked"]
     C -->|"strategy: forbid"| F["Check: failure<br/>this PR is not allowed"]
-    E --> G{"ready-to-merge<br/>label added"}
+    E --> G{"ready-to-merge label added<br/>or Merge now pressed"}
     G -->|"yes"| H{"CI, review and<br/>conflict checks"}
     H -->|"pass"| I["App merges with a merge commit<br/>Check: success"]
-    H -->|"fail"| E
+    H -->|"fail"| J["Check: action_required<br/>says what is in the way"]
+    J -->|"labelled: retried on the next event"| H
 ```
 
 Two ideas carry the whole design.
@@ -116,7 +118,7 @@ sequenceDiagram
 
     Dev->>GH: Open develop -> staging
     GH->>App: pull_request.opened
-    App->>GH: Check "mergegate" = action_required<br/>"Merge commit required. Add the ready-to-merge label."
+    App->>GH: Check "mergegate" = action_required<br/>"Merge commit required. Add the ready-to-merge label<br/>or press Merge now."
     Note over GH: The ruleset disables the merge button
     Dev->>GH: Add the ready-to-merge label
     GH->>App: pull_request.labeled
@@ -133,6 +135,32 @@ sequenceDiagram
 
 Labelling a PR while CI is still running is fine. The app re-evaluates on `check_suite`, `status` and
 `pull_request_review` events and merges as soon as every condition holds.
+
+### Merge now
+
+The `mergegate` check carries a **Merge now** button in the Checks tab, so a promotion never has to leave
+that screen. It merges then and there, through exactly the gates the label goes through, and **never adds
+or removes a label of its own** — the label stays something you set, not something the app writes.
+
+The two triggers therefore differ in one way, and the check run says which one you have:
+
+|                                              | `ready-to-merge` label                    | **Merge now**             |
+| -------------------------------------------- | ----------------------------------------- | ------------------------- |
+| Merges when everything holds                 | Yes                                       | Yes                       |
+| Still merges later, once CI or review clears | Yes — the label is a standing instruction | No — a press happens once |
+
+So a press that cannot merge yet reports what is in the way and keeps the button, rather than promising a
+merge nobody armed. Add the label instead if you want mergegate to come back on its own.
+
+See [Merging from the Checks tab](#merging-from-the-checks-tab) for what the button itself has to satisfy,
+and set `merge.allowCheckAction: false` to take it away and leave the label as the only trigger.
+
+### Re-run
+
+The check's **Re-run** button re-evaluates the pull request from scratch — the branch pair, the gates and
+the check run output — and rewrites the check. The app remembers nothing between deliveries, so pressing
+it is always safe: it is how you ask for a fresh answer when a delivery was missed or a condition changed
+without an event of its own. **Re-run all checks** does the same.
 
 ---
 
@@ -337,6 +365,7 @@ merge:
   requireChecks: true # Every check other than mergegate must have succeeded
   requireUpToDate: false # The head must be up to date with the base
   allowForkHead: false # Whether PRs from forks may match non-squash rules
+  allowCheckAction: true # Offer a "Merge now" button on the check run
   deleteBranchOnMerge: false # Delete the head branch after merging
   removeLabelOnFailure: true # Drop the label on a permanent failure so re-adding retries
   commitTitle: "Merge {head} into {base} (#{number})"
@@ -386,12 +415,14 @@ merge commit and rebase are not even offered.
 
 1. Open the PR. The `mergegate` check reports **Action required** and the merge button is disabled.
 2. The check details explain that this PR will be merged with a merge commit once you add the
-   `ready-to-merge` label.
-3. When review and CI are done, add the `ready-to-merge` label.
-4. mergegate merges it with a merge commit. If CI is still running when you label it, the app waits and
+   `ready-to-merge` label, and carry a **Merge now** button for merging it on the spot.
+3. Add the `ready-to-merge` label. If CI is still running, that is fine: the label stands, and mergegate
    merges once CI finishes.
+4. Or, once everything is already green, press **Merge now** on the check in the Checks tab and it merges
+   straight away without leaving that screen.
 
-**Changed your mind?** Remove the label. As long as the merge has not started, it is cancelled.
+**Changed your mind?** Remove the label. As long as the merge has not started, it is cancelled. There is
+nothing to cancel after a press of **Merge now**: it either merged or it told you why it could not.
 
 ### A forbidden branch pair
 
@@ -422,6 +453,13 @@ right base branch — changing the base triggers a fresh evaluation — or close
 The first row's title names whichever strategy `merge.manual` lists, so a repository whose humans merge with
 merge commits sees `Merge commit` there instead.
 
+The `Labelled` rows read the same way for a pull request whose merge was asked for with **Merge now**, with
+one difference the summary spells out: a labelled pull request is one mergegate comes back to, an unlabelled
+one is not. So the **Merge now** button stays on every state where nothing is going to happen by itself —
+`Merge commit required`, an unlabelled wait, and an unlabelled `Cannot merge` — and is absent wherever
+mergegate is already going to act, where `merge.allowCheckAction` is off, and on
+`Cannot read every check on this commit`, which no press could clear either.
+
 Both `action_required` and `failure` count as failing for a required status check, so either blocks the
 merge. The check is flipped to `success` after an assisted merge so that merged PRs do not carry a red X in
 their history.
@@ -440,7 +478,7 @@ Even with the `ready-to-merge` label present, the app merges only once all of th
 - `mergeable` is true (no conflict with the base). GitHub computes this asynchronously, so a freshly
   labelled PR often has no answer yet; mergegate waits a few seconds for one rather than leaving the PR
   blocked until some other event wakes it. If it still has not settled, the check says so and the label can
-  be re-added
+  be re-added — or **Merge now** pressed again
 - With `merge.requireChecks: true`, every check run and commit status other than `mergegate` is
   success, neutral or skipped. Checks are read past the first page of GitHub's rollup; a commit carrying
   more than 1,100 of them is refused rather than merged on the part that was read
@@ -451,13 +489,31 @@ Even with the `ready-to-merge` label present, the app merges only once all of th
 The merge call carries **the head SHA that was evaluated**. If a new commit is pushed in between, GitHub
 returns 409, and mergegate aborts and re-evaluates — an unreviewed commit never sneaks into a merge.
 
+### Merging from the Checks tab
+
+**Merge now** goes through every gate above, and two more that belong to the button itself.
+
+- **Whoever pressed it must be able to push to the repository.** Pressing a button in a browser carries no
+  permission of its own, so mergegate asks GitHub for that user's permission level and refuses anything
+  below write. That is what stands in for "labelling requires write access". If the answer cannot be read,
+  the press is refused and the label stays the way in.
+- **The button belongs to the commit it was rendered on.** If the head moved between the check run and the
+  press, mergegate ignores the press and only re-evaluates the pull request; the new commit gets a button
+  of its own. The press also names a commit rather than a pull request, so on the rare commit that heads
+  two open PRs nothing is merged — use the label there.
+
+A press that clears all of it merges immediately. A press that does not writes the reason into the check and
+stops there, leaving the button for when the reason is gone — it never adds the label on your behalf, so
+nothing about the pull request changes behind your back.
+
 ### When it fails
 
 - **Transient failures** (CI still running, the base moved) leave the check updated and the app retries on
   the next event.
 - **Permanent failures** (conflict, missing permission, merge method disabled in repository settings) are
   written into the check, and with `merge.removeLabelOnFailure: true` the label is dropped. Fix the cause and
-  re-add the label to retry.
+  re-add the label to retry. A merge asked for with **Merge now** had no label in the first place, so the
+  check keeps the button instead.
 
 ---
 
@@ -465,16 +521,19 @@ returns 409, and mergegate aborts and re-evaluates — an unreviewed commit neve
 
 ### Repository permissions
 
-| Permission    | Level        | Used for                             |
-| ------------- | ------------ | ------------------------------------ |
-| Metadata      | Read         | Mandatory                            |
-| Checks        | Read & write | Creating and updating check runs     |
-| Contents      | Read & write | Reading the config file, merging     |
-| Pull requests | Read & write | Reading PRs, merging, label handling |
+| Permission    | Level        | Used for                                            |
+| ------------- | ------------ | --------------------------------------------------- |
+| Metadata      | Read         | Mandatory. Also the permission behind `Merge now`   |
+| Checks        | Read & write | Creating and updating check runs                    |
+| Contents      | Read & write | Reading the config file, merging                    |
+| Pull requests | Read & write | Reading PRs, merging, dropping the label on failure |
 
 ### Webhook events
 
 `pull_request`, `pull_request_review`, `check_suite`, `check_run`, `status`, `push`, `installation`
+
+`check_run` carries the **Re-run** and **Merge now** presses as well as other apps' results, and GitHub only
+sends the first two to apps with **Checks: read & write** — which the table above already asks for.
 
 ### Guarantees by design
 
@@ -484,8 +543,13 @@ returns 409, and mergegate aborts and re-evaluates — an unreviewed commit neve
   comparison; anything else is rejected with 401.
 - **Labelling requires write access**, so the trigger for an assisted merge rides on GitHub's own permission
   model.
-- **The app ignores its own events.** `check_run` events for check runs mergegate created are dropped, so
-  it cannot loop.
+- **The app ignores its own results.** A `check_run.completed` event for a check run mergegate created is
+  dropped, so it cannot loop. The **Re-run** and **Merge now** presses are the opposite case: GitHub sends
+  those only to the app that owns the check run, so they are acted on precisely when the check run is ours.
+- **Merging from the Checks tab requires write access**, checked against GitHub's permission API before the
+  press is honoured, and the press is tied to the commit it was rendered on. It merges or it does not: the
+  app never writes a label to stand in for you. `merge.allowCheckAction: false` removes the button and stops
+  the app from honouring it at all.
 - **Bypass is kept narrow.** "For pull requests only" is the recommended mode. Bypassing is the price of this
   design, which is exactly why the app re-verifies CI and review itself.
 - **No state is owned by the app.** Everything needed for a decision comes from the GitHub API. The only
@@ -557,7 +621,6 @@ that hands it a `Request` and the four ports above — nothing in `core/` change
 
 ## Roadmap
 
-- Check run requested actions (merge from the Checks tab instead of adding a label)
 - Per-PR event serialization with Durable Objects
 - GitHub Enterprise Server support
 

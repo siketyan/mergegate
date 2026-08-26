@@ -45,6 +45,7 @@ async function report(
     conclusion: output.conclusion,
     title: output.title,
     summary: output.summary,
+    actions: output.actions,
   });
 }
 
@@ -72,6 +73,7 @@ async function runAssistedMerge(
   config: Config,
   pullRequest: PullRequestState,
   strategy: Strategy,
+  labelled: boolean,
 ): Promise<void> {
   const checkName = config.check.name;
   const outcome = await merge(api, repo, config, pullRequest, strategy);
@@ -93,11 +95,16 @@ async function runAssistedMerge(
   await report(api, repo, checkName, pullRequest.headSha, {
     kind: "merge-failed",
     message: outcome.message,
+    strategy,
+    // Nothing brings mergegate back to an unlabelled pull request, so the way
+    // to retry has to stay on the check run itself.
+    offerMerge: config.merge.allowCheckAction && !labelled,
   });
 
   // A transient failure is retried by the next event; a permanent one drops the
-  // label so that re-adding it is the retry.
-  if (!TRANSIENT.has(outcome.kind) && config.merge.removeLabelOnFailure) {
+  // label so that re-adding it is the retry. A merge that was armed from the
+  // Checks tab and failed before the label went on has nothing to drop.
+  if (!TRANSIENT.has(outcome.kind) && labelled && config.merge.removeLabelOnFailure) {
     await api.removeLabel(repo, pullRequest.number, config.merge.label);
   }
 }
@@ -141,6 +148,64 @@ async function resolveCarriedFrom(
   return carried;
 }
 
+/** A press of the "Merge now" button, as it reached the webhook. */
+export interface MergeRequest {
+  /** The head the check run carrying the button was rendered on. */
+  readonly headSha: string;
+  /** Who pressed it. */
+  readonly actor: string;
+}
+
+export interface EvaluateOptions {
+  readonly mergeRequest?: MergeRequest;
+}
+
+/**
+ * Whether a press of the button is honoured. The app bypasses the ruleset, so
+ * this is the only thing between a button in a browser and a merge: the feature
+ * has to be enabled, the button has to belong to the commit being evaluated,
+ * and whoever pressed it has to be able to push.
+ */
+async function acceptMergeRequest(
+  context: AppContext,
+  api: GitHubApi,
+  repo: RepoRef,
+  config: Config,
+  pullRequest: PullRequestState,
+  request: MergeRequest | undefined,
+): Promise<boolean> {
+  if (request === undefined) {
+    return false;
+  }
+  if (!config.merge.allowCheckAction) {
+    context.logger.info("merge action disabled by configuration", { pull: pullRequest.number });
+    return false;
+  }
+  if (request.headSha !== pullRequest.headSha) {
+    // The button was rendered on a commit that is no longer the head, so
+    // nobody has asked for *this* commit to be merged.
+    context.logger.warn("merge action ignored: head moved", {
+      pull: pullRequest.number,
+      requested: request.headSha,
+      head: pullRequest.headSha,
+    });
+    return false;
+  }
+  if (!(await api.canPush(repo, request.actor))) {
+    context.logger.warn("merge action refused: no write access", {
+      pull: pullRequest.number,
+      actor: request.actor,
+    });
+    return false;
+  }
+  context.logger.info("merge requested from the checks tab", {
+    pull: pullRequest.number,
+    actor: request.actor,
+  });
+
+  return true;
+}
+
 /**
  * Re-read the pull request while GitHub is still working out whether it merges
  * cleanly. Returns the last state seen — still undetermined if the backoff runs
@@ -182,6 +247,7 @@ export async function evaluatePullRequest(
   api: GitHubApi,
   repo: RepoRef,
   pullNumber: number,
+  options: EvaluateOptions = {},
 ): Promise<void> {
   const result = await loadConfig(context, api, repo);
 
@@ -227,11 +293,17 @@ export async function evaluatePullRequest(
       return;
 
     case "assisted": {
-      if (!pullRequest.labels.includes(config.merge.label)) {
+      const labelled = pullRequest.labels.includes(config.merge.label);
+      const requested =
+        !labelled &&
+        (await acceptMergeRequest(context, api, repo, config, pullRequest, options.mergeRequest));
+
+      if (!labelled && !requested) {
         await report(api, repo, checkName, pullRequest.headSha, {
           kind: "awaiting-label",
           strategy: decision.strategy,
           label: config.merge.label,
+          offerMerge: config.merge.allowCheckAction,
         });
         return;
       }
@@ -244,15 +316,21 @@ export async function evaluatePullRequest(
 
       const gate = evaluateGate(settled, config.merge);
       if (!gate.ready) {
+        // A press merges or it does not; it leaves nothing behind that would
+        // make mergegate come back. Only the label does that, so an unlabelled
+        // pull request keeps the button and is told as much.
         await report(api, repo, checkName, settled.headSha, {
           kind: "waiting",
           reason: gate.reason,
           label: config.merge.label,
+          strategy: decision.strategy,
+          armed: labelled,
+          offerMerge: config.merge.allowCheckAction && !labelled,
         });
         return;
       }
 
-      await runAssistedMerge(context, api, repo, config, settled, decision.strategy);
+      await runAssistedMerge(context, api, repo, config, settled, decision.strategy, labelled);
       return;
     }
   }

@@ -5,7 +5,7 @@
 
 import type { Strategy } from "./config/schema.ts";
 import type { CheckConclusion as GateCheckConclusion, ReviewDecision } from "./policy/gate.ts";
-import type { CheckConclusion } from "./check/render.ts";
+import type { CheckAction, CheckConclusion } from "./check/render.ts";
 
 export interface RepoRef {
   readonly owner: string;
@@ -68,6 +68,8 @@ export interface CheckRunInput {
   readonly conclusion: CheckConclusion;
   readonly title: string;
   readonly summary: string;
+  /** Buttons for the Checks tab. Always sent, so an update clears stale ones. */
+  readonly actions: readonly CheckAction[];
 }
 
 export interface MergeInput {
@@ -113,6 +115,12 @@ export interface GitHubApi {
   findPullRequestsForSha(repo: RepoRef, sha: string): Promise<readonly number[]>;
   mergePullRequest(repo: RepoRef, pullNumber: number, input: MergeInput): Promise<MergeOutcome>;
   removeLabel(repo: RepoRef, pullNumber: number, label: string): Promise<void>;
+  /**
+   * Whether a user may push to the repository. Pressing a button in the Checks
+   * tab carries no permission of its own, so the assisted merge asks here
+   * before it stands in for the label.
+   */
+  canPush(repo: RepoRef, login: string): Promise<boolean>;
   deleteBranch(repo: RepoRef, branch: string): Promise<void>;
 }
 
