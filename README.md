@@ -558,9 +558,6 @@ that hands it a `Request` and the four ports above — nothing in `core/` change
 ## Roadmap
 
 - Check run requested actions (merge from the Checks tab instead of adding a label)
-- Opt-in PR comments explaining the decision
-- Organization-wide defaults inherited from the `.github` repository
-- The configuration schema on SchemaStore, so editors find it without the `$schema` comment
 - Per-PR event serialization with Durable Objects
 - GitHub Enterprise Server support
 
