@@ -20,6 +20,7 @@ export type GateReason =
   | "mergeability-unknown"
   | "conflict"
   | "waiting-checks"
+  | "checks-unreadable"
   | "waiting-review"
   | "changes-requested"
   | "behind-base";
@@ -36,6 +37,11 @@ export interface GateInput {
   readonly reviewDecision: ReviewDecision;
   /** Conclusions of every check except the one mergegate owns. */
   readonly otherChecks: readonly CheckConclusion[];
+  /**
+   * `true` when GitHub reported more checks than mergegate was willing to page
+   * through, so `otherChecks` is not the whole story.
+   */
+  readonly checksTruncated: boolean;
 }
 
 const PASSING: ReadonlySet<CheckConclusion> = new Set(["success", "neutral", "skipped"]);
@@ -60,8 +66,15 @@ export function evaluateGate(input: GateInput, settings: MergeSettings): GateRes
   if (settings.requireApproval && input.reviewDecision === "REVIEW_REQUIRED") {
     return { ready: false, reason: "waiting-review" };
   }
-  if (settings.requireChecks && !input.otherChecks.every((check) => PASSING.has(check))) {
-    return { ready: false, reason: "waiting-checks" };
+  if (settings.requireChecks) {
+    // An unread check is not a passing one: a rollup mergegate could not read
+    // to the end blocks rather than merging on the part it did see.
+    if (input.checksTruncated) {
+      return { ready: false, reason: "checks-unreadable" };
+    }
+    if (!input.otherChecks.every((check) => PASSING.has(check))) {
+      return { ready: false, reason: "waiting-checks" };
+    }
   }
   if (settings.requireUpToDate && input.behindBase) {
     return { ready: false, reason: "behind-base" };

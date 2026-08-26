@@ -58,6 +58,8 @@ export interface PullRequestState {
   readonly reviewDecision: ReviewDecision;
   /** Every check on the head commit except the one mergegate owns. */
   readonly otherChecks: readonly GateCheckConclusion[];
+  /** `true` when the check rollup was longer than mergegate read. */
+  readonly checksTruncated: boolean;
 }
 
 export interface CheckRunInput {
@@ -130,6 +132,8 @@ export interface AppContext {
   readonly github: GitHubApiFactory;
   readonly logger: Logger;
   readonly deferrer: Deferrer;
+  /** Waiting on GitHub to catch up, in the deferred work after the 202. */
+  readonly sleep: (milliseconds: number) => Promise<void>;
   readonly env: Env;
   readonly cache?: Cache;
 }

@@ -443,6 +443,7 @@ right base branch — changing the base triggers a fresh evaluation — or close
 | Labelled, changes requested                        | `action_required` | `Cannot merge: changes requested`                       |
 | Labelled, still a draft                            | `action_required` | `Waiting for the pull request to be ready`              |
 | Labelled, mergeability not computed yet            | `action_required` | `Waiting for GitHub to compute mergeability`            |
+| Labelled, more checks than mergegate reads         | `action_required` | `Cannot read every check on this commit`                |
 | Labelled, behind the base (with `requireUpToDate`) | `action_required` | `Waiting for the branch to be up to date`               |
 | Labelled, the merge API refused                    | `action_required` | `Cannot merge`                                          |
 | Assisted merge succeeded                           | `success`         | `Merged by mergegate`                                   |
@@ -455,8 +456,9 @@ merge commits sees `Merge commit` there instead.
 The `Labelled` rows read the same way for a pull request whose merge was asked for with **Merge now**, with
 one difference the summary spells out: a labelled pull request is one mergegate comes back to, an unlabelled
 one is not. So the **Merge now** button stays on every state where nothing is going to happen by itself —
-`Merge commit required`, an unlabelled wait, and an unlabelled `Cannot merge` — and is absent everywhere
-mergegate is already going to act, or where `merge.allowCheckAction` is off.
+`Merge commit required`, an unlabelled wait, and an unlabelled `Cannot merge` — and is absent wherever
+mergegate is already going to act, where `merge.allowCheckAction` is off, and on
+`Cannot read every check on this commit`, which no press could clear either.
 
 Both `action_required` and `failure` count as failing for a required status check, so either blocks the
 merge. The check is flipped to `success` after an assisted merge so that merged PRs do not carry a red X in
@@ -473,9 +475,13 @@ their history.
 Even with the `ready-to-merge` label present, the app merges only once all of the following hold.
 
 - The PR is open and not a draft
-- `mergeable` is true (no conflict with the base)
+- `mergeable` is true (no conflict with the base). GitHub computes this asynchronously, so a freshly
+  labelled PR often has no answer yet; mergegate waits a few seconds for one rather than leaving the PR
+  blocked until some other event wakes it. If it still has not settled, the check says so and the label can
+  be re-added — or **Merge now** pressed again
 - With `merge.requireChecks: true`, every check run and commit status other than `mergegate` is
-  success, neutral or skipped
+  success, neutral or skipped. Checks are read past the first page of GitHub's rollup; a commit carrying
+  more than 1,100 of them is refused rather than merged on the part that was read
 - With `merge.requireApproval: true`, `reviewDecision` is `APPROVED` or reviews are not required (`null`).
   `CHANGES_REQUESTED` is always refused
 - With `merge.requireUpToDate: true`, the head is up to date with the base

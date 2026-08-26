@@ -104,7 +104,23 @@ export type PullRequestStateQueryVariables = Exact<{
 }>;
 
 
-export type PullRequestStateQuery = { repository: { nameWithOwner: string, pullRequest: { number: number, title: string, state: PullRequestState, isDraft: boolean, mergeable: MergeableState, mergeStateStatus: MergeStateStatus, reviewDecision: PullRequestReviewDecision | null, baseRefName: string, headRefName: string, headRefOid: string, headRepository: { nameWithOwner: string } | null, labels: { nodes: Array<{ name: string } | null> | null } | null, commits: { nodes: Array<{ commit: { statusCheckRollup: { contexts: { nodes: Array<
+export type PullRequestStateQuery = { repository: { nameWithOwner: string, pullRequest: { number: number, title: string, state: PullRequestState, isDraft: boolean, mergeable: MergeableState, mergeStateStatus: MergeStateStatus, reviewDecision: PullRequestReviewDecision | null, baseRefName: string, headRefName: string, headRefOid: string, headRepository: { nameWithOwner: string } | null, labels: { nodes: Array<{ name: string } | null> | null } | null, commits: { nodes: Array<{ commit: { oid: string, statusCheckRollup: { contexts: { pageInfo: { hasNextPage: boolean, endCursor: string | null }, nodes: Array<
                   | { __typename: 'CheckRun', name: string, status: CheckStatusState, conclusion: CheckConclusionState | null }
                   | { __typename: 'StatusContext', state: StatusState }
                  | null> | null } } | null } } | null> | null } } | null } | null };
+
+export type PullRequestCheckContextsQueryVariables = Exact<{
+  owner: string;
+  repo: string;
+  oid: string;
+  after: string;
+}>;
+
+
+export type PullRequestCheckContextsQuery = { repository: { object:
+      | { statusCheckRollup: { contexts: { pageInfo: { hasNextPage: boolean, endCursor: string | null }, nodes: Array<
+              | { __typename: 'CheckRun', name: string, status: CheckStatusState, conclusion: CheckConclusionState | null }
+              | { __typename: 'StatusContext', state: StatusState }
+             | null> | null } } | null }
+      | Record<PropertyKey, never>
+     | null } | null };

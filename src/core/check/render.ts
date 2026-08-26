@@ -77,51 +77,105 @@ function mergeAction(strategy: Strategy): CheckAction {
 }
 
 /**
- * What is in the way, without saying what happens next: that depends on whether
- * the label is on, which is what `nextStep` answers.
+ * How a wait ends.
+ *
+ * - `resumes`: an ordinary event brings mergegate back, so a labelled pull
+ *   request clears this without anyone doing anything.
+ * - `retry`: nothing is guaranteed to wake the app again, so someone has to ask
+ *   for another attempt.
+ * - `manual`: mergegate cannot merge this one at all.
  */
-const WAITING: Record<GateReason, { title: string; summary: string }> = {
+type Recovery = "resumes" | "retry" | "manual";
+
+interface Waiting {
+  readonly title: string;
+  /** What is in the way. What happens next is `nextStep`'s to say. */
+  readonly summary: string;
+  readonly recovery: Recovery;
+}
+
+const WAITING: Record<GateReason, Waiting> = {
   draft: {
     title: "Waiting for the pull request to be ready",
     summary: "This pull request is a draft. Mark it ready for review to continue.",
+    recovery: "resumes",
   },
   "mergeability-unknown": {
     title: "Waiting for GitHub to compute mergeability",
-    summary: "GitHub has not finished computing whether this branch merges cleanly.",
+    summary:
+      "GitHub had not finished working out whether this branch merges cleanly, and it did not settle " +
+      "while mergegate waited.",
+    // The backoff is spent, and a repository with no other checks produces no
+    // further event to come back on.
+    recovery: "retry",
   },
   conflict: {
     title: "Cannot merge: conflicts with base",
     summary: "This branch conflicts with its base branch. Resolve the conflicts to continue.",
+    recovery: "resumes",
   },
   "waiting-checks": {
     title: "Waiting for other checks",
     summary: "Every other check on this commit has to succeed first.",
+    recovery: "resumes",
+  },
+  "checks-unreadable": {
+    title: "Cannot read every check on this commit",
+    summary:
+      "This commit has more checks than mergegate reads, so it cannot tell whether they all passed. " +
+      "Merge this pull request by hand, or reduce the number of checks on the commit.",
+    recovery: "manual",
   },
   "waiting-review": {
     title: "Waiting for review approval",
     summary: "This pull request still needs an approving review.",
+    recovery: "resumes",
   },
   "changes-requested": {
     title: "Cannot merge: changes requested",
     summary: "A reviewer requested changes. mergegate never merges over a requested change.",
+    recovery: "resumes",
   },
   "behind-base": {
     title: "Waiting for the branch to be up to date",
     summary: "Update this branch from its base to continue.",
+    recovery: "resumes",
   },
 };
+
+interface Trigger {
+  readonly label: string;
+  /** Whether the label is on, and so whether mergegate returns by itself. */
+  readonly armed: boolean;
+  readonly offerMerge: boolean;
+}
 
 /**
  * The label is a standing instruction, so mergegate comes back to a labelled
  * pull request on its own. A press of the button is a one-off, and saying so is
  * the difference between an honest check run and a promise nobody keeps.
  */
-function nextStep(state: { label: string; armed: boolean; offerMerge: boolean }): string {
-  if (state.armed) {
-    return `mergegate merges as soon as that clears, while the \`${state.label}\` label is on.`;
+function nextStep(state: Trigger, recovery: Recovery): string {
+  switch (recovery) {
+    case "manual":
+      // The summary already says the only thing that works.
+      return "";
+    case "retry": {
+      if (state.armed) {
+        return `Push to the branch or re-add the \`${state.label}\` label to try again.`;
+      }
+      return state.offerMerge
+        ? `Add the \`${state.label}\` label, or press **Merge now** again, to try again.`
+        : `Add the \`${state.label}\` label to try again.`;
+    }
+    case "resumes": {
+      if (state.armed) {
+        return `mergegate merges as soon as that clears, while the \`${state.label}\` label is on.`;
+      }
+      const label = `Add the \`${state.label}\` label to have mergegate merge as soon as that clears`;
+      return state.offerMerge ? `${label}, or press **Merge now** again yourself.` : `${label}.`;
+    }
   }
-  const label = `Add the \`${state.label}\` label to have mergegate merge as soon as that clears`;
-  return state.offerMerge ? `${label}, or press **Merge now** again yourself.` : `${label}.`;
 }
 
 export function renderCheck(state: CheckState): CheckOutput {
@@ -149,11 +203,14 @@ export function renderCheck(state: CheckState): CheckOutput {
       };
     case "waiting": {
       const waiting = WAITING[state.reason];
+      const step = nextStep(state, waiting.recovery);
       return {
         conclusion: "action_required",
         title: waiting.title,
-        summary: `${waiting.summary} ${nextStep(state)}`,
-        actions: state.offerMerge ? [mergeAction(state.strategy)] : [],
+        summary: step === "" ? waiting.summary : `${waiting.summary} ${step}`,
+        // Nothing to press where a press could never clear it either.
+        actions:
+          state.offerMerge && waiting.recovery !== "manual" ? [mergeAction(state.strategy)] : [],
       };
     }
     case "merged":

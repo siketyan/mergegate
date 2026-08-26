@@ -9,6 +9,15 @@ import { loadConfig } from "./config.ts";
 
 const TRANSIENT: ReadonlySet<string> = new Set(["head-changed", "not-ready"]);
 
+/**
+ * GitHub computes mergeability asynchronously, so the first look at a freshly
+ * labelled pull request often finds it undetermined. Nothing is guaranteed to
+ * wake the app again — a repository with no other checks gets no further events
+ * — so it waits here rather than leaving the pull request blocked for good.
+ * Bounded, because "do not wait forever" is the other half of that rule.
+ */
+const MERGEABILITY_BACKOFF_MS = [2000, 4000, 8000] as const;
+
 function renderTemplate(template: string, values: Record<string, string>): string {
   return template.replaceAll(/\{(\w+)\}/g, (match, name: string) => values[name] ?? match);
 }
@@ -198,6 +207,38 @@ async function acceptMergeRequest(
 }
 
 /**
+ * Re-read the pull request while GitHub is still working out whether it merges
+ * cleanly. Returns the last state seen — still undetermined if the backoff runs
+ * out — or `null` when the head moved and this evaluation is stale.
+ */
+async function settleMergeability(
+  context: AppContext,
+  api: GitHubApi,
+  repo: RepoRef,
+  checkName: string,
+  pullRequest: PullRequestState,
+): Promise<PullRequestState | null> {
+  let current = pullRequest;
+  for (const delay of MERGEABILITY_BACKOFF_MS) {
+    if (current.mergeable !== null) {
+      return current;
+    }
+    await context.sleep(delay);
+    const refreshed = await api.getPullRequestState(repo, current.number, {
+      ownCheckName: checkName,
+    });
+    if (refreshed === null || refreshed.state !== "open") {
+      return current;
+    }
+    if (refreshed.headSha !== pullRequest.headSha) {
+      return null;
+    }
+    current = refreshed;
+  }
+  return current;
+}
+
+/**
  * Decide what a pull request is allowed to do, say so in the check run, and
  * merge it when it is an assisted merge that has cleared every gate.
  */
@@ -267,12 +308,18 @@ export async function evaluatePullRequest(
         return;
       }
 
-      const gate = evaluateGate(pullRequest, config.merge);
+      const settled = await settleMergeability(context, api, repo, checkName, pullRequest);
+      if (settled === null) {
+        // The head moved while waiting; the push's own event re-evaluates it.
+        return;
+      }
+
+      const gate = evaluateGate(settled, config.merge);
       if (!gate.ready) {
         // A press merges or it does not; it leaves nothing behind that would
         // make mergegate come back. Only the label does that, so an unlabelled
         // pull request keeps the button and is told as much.
-        await report(api, repo, checkName, pullRequest.headSha, {
+        await report(api, repo, checkName, settled.headSha, {
           kind: "waiting",
           reason: gate.reason,
           label: config.merge.label,
@@ -283,7 +330,7 @@ export async function evaluatePullRequest(
         return;
       }
 
-      await runAssistedMerge(context, api, repo, config, pullRequest, decision.strategy, labelled);
+      await runAssistedMerge(context, api, repo, config, settled, decision.strategy, labelled);
       return;
     }
   }

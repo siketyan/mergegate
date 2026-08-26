@@ -26,15 +26,23 @@ async function run(
   overrides: Partial<PullRequestState> = {},
   options: EvaluateOptions = {},
 ): Promise<FakeGitHubState> {
+  return (await runWithContext(state, overrides, options)).state;
+}
+
+async function runWithContext(
+  state: Partial<FakeGitHubState>,
+  overrides: Partial<PullRequestState> = {},
+  options: EvaluateOptions = {},
+): Promise<{ state: FakeGitHubState; slept: number[] }> {
   const pull = pullRequest(overrides);
   const { api, state: fake } = createFakeGitHub({
     configSource: CONFIG,
     pullRequests: new Map([[pull.number, pull]]),
     ...state,
   });
-  const { context } = createTestContext(api);
+  const { context, slept } = createTestContext(api);
   await evaluatePullRequest(context, api, repo, pull.number, options);
-  return fake;
+  return { state: fake, slept };
 }
 
 /** A press of the button on the commit the pull request is actually at. */
@@ -289,4 +297,49 @@ test("the label wins over the button, so the permission is never looked up", asy
   const state = await run({}, { labels: ["ready-to-merge"] }, PRESSED);
   expect(state.permissionQueries).toEqual([]);
   expect(state.merges).toHaveLength(1);
+});
+
+const LABELLED = { labels: ["ready-to-merge"] };
+
+test("undetermined mergeability is waited out, not left to an event that may not come", async () => {
+  const settling = pullRequest({ ...LABELLED, mergeable: true });
+  const { state, slept } = await runWithContext(
+    { nextStates: [pullRequest({ ...LABELLED, mergeable: null }), settling] },
+    { ...LABELLED, mergeable: null },
+  );
+
+  expect(slept).toEqual([2000]);
+  expect(state.merges).toHaveLength(1);
+  expect(state.checkRuns.at(-1)).toMatchObject({ title: "Merged by mergegate" });
+});
+
+test("the wait is bounded", async () => {
+  const unknown = () => pullRequest({ ...LABELLED, mergeable: null });
+  const { state, slept } = await runWithContext(
+    { nextStates: [unknown(), unknown(), unknown(), unknown()] },
+    { ...LABELLED, mergeable: null },
+  );
+
+  expect(slept).toEqual([2000, 4000, 8000]);
+  expect(state.merges).toHaveLength(0);
+  expect(state.checkRuns.at(-1)).toMatchObject({
+    conclusion: "action_required",
+    title: "Waiting for GitHub to compute mergeability",
+  });
+});
+
+test("a push during the wait hands the pull request to its own event", async () => {
+  const { state } = await runWithContext(
+    {
+      nextStates: [
+        pullRequest({ ...LABELLED, mergeable: null }),
+        pullRequest({ ...LABELLED, mergeable: true, headSha: "moved" }),
+      ],
+    },
+    { ...LABELLED, mergeable: null },
+  );
+
+  // Nothing is written against a head that is no longer current.
+  expect(state.checkRuns).toHaveLength(0);
+  expect(state.merges).toHaveLength(0);
 });

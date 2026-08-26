@@ -87,16 +87,17 @@ test("a merge that failed with no label behind it keeps a way to retry", () => {
 
 test("every gate reason blocks the merge", () => {
   const reasons = [
-    ["waiting-checks", "Waiting for other checks"],
-    ["waiting-review", "Waiting for review approval"],
-    ["conflict", "Cannot merge: conflicts with base"],
-    ["changes-requested", "Cannot merge: changes requested"],
-    ["behind-base", "Waiting for the branch to be up to date"],
-    ["draft", "Waiting for the pull request to be ready"],
-    ["mergeability-unknown", "Waiting for GitHub to compute mergeability"],
+    ["waiting-checks", "Waiting for other checks", true],
+    ["waiting-review", "Waiting for review approval", true],
+    ["conflict", "Cannot merge: conflicts with base", true],
+    ["changes-requested", "Cannot merge: changes requested", true],
+    ["behind-base", "Waiting for the branch to be up to date", true],
+    ["draft", "Waiting for the pull request to be ready", true],
+    ["mergeability-unknown", "Waiting for GitHub to compute mergeability", false],
+    ["checks-unreadable", "Cannot read every check on this commit", false],
   ] as const;
 
-  for (const [reason, title] of reasons) {
+  for (const [reason, title, resumes] of reasons) {
     const output = renderCheck({
       kind: "waiting",
       reason,
@@ -107,9 +108,55 @@ test("every gate reason blocks the merge", () => {
     });
     expect(output.conclusion).toBe("action_required");
     expect(output.title).toBe(title);
-    // Only a labelled pull request is one mergegate comes back to.
-    expect(output.summary).toContain("mergegate merges as soon as that clears");
+    // Only where an ordinary event brings mergegate back may the check say so.
+    expect(output.summary.includes("mergegate merges as soon as that clears")).toBe(resumes);
   }
+});
+
+test("a wait mergegate will not come back to says so instead", () => {
+  // The backoff is spent and no further event is guaranteed, so the label being
+  // on is not the same promise it is everywhere else.
+  const output = renderCheck({
+    kind: "waiting",
+    reason: "mergeability-unknown",
+    label: "ready-to-merge",
+    strategy: "merge",
+    armed: true,
+    offerMerge: false,
+  });
+  expect(output.title).toBe("Waiting for GitHub to compute mergeability");
+  expect(output.summary).not.toContain("mergegate merges as soon as that clears");
+  expect(output.summary).toContain("Push to the branch or re-add the `ready-to-merge` label");
+});
+
+test("an unarmed wait mergegate will not come back to offers the press as the retry", () => {
+  const output = renderCheck({
+    kind: "waiting",
+    reason: "mergeability-unknown",
+    label: "ready-to-merge",
+    strategy: "merge",
+    armed: false,
+    offerMerge: true,
+  });
+  expect(output.summary).toContain("press **Merge now** again");
+  expect(output.actions).toHaveLength(1);
+});
+
+test("a wait no press could ever clear keeps no button and adds no advice", () => {
+  const output = renderCheck({
+    kind: "waiting",
+    reason: "checks-unreadable",
+    label: "ready-to-merge",
+    strategy: "merge",
+    armed: false,
+    offerMerge: true,
+  });
+  expect(output.title).toBe("Cannot read every check on this commit");
+  // The summary already names the only thing that works.
+  expect(output.summary).toContain("Merge this pull request by hand");
+  expect(output.summary).not.toContain("Merge now");
+  expect(output.summary).not.toContain("ready-to-merge");
+  expect(output.actions).toEqual([]);
 });
 
 test("a wait nobody armed promises nothing and keeps the button", () => {
