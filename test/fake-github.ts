@@ -8,7 +8,7 @@ import type {
   MergeOutcome,
   PullRequestState,
   RepoRef,
-} from "../src/core/ports.ts";
+} from "../src/ports.ts";
 
 export interface FakeGitHubState {
   configSource: string | null;

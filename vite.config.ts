@@ -12,8 +12,10 @@ export default defineConfig({
     overrides: [
       {
         // Dependencies point adapters -> core, never the other way round, and
-        // core sticks to web standard APIs. See CLAUDE.md.
-        files: ["src/core/**/*.ts"],
+        // core sticks to web standard APIs. Core is everything under `src/`
+        // that is not an adapter, so the rule is set for all of `src/` and
+        // taken off `src/adapters/` below. See CLAUDE.md.
+        files: ["src/**/*.ts"],
         rules: {
           "no-restricted-imports": [
             "error",
@@ -26,6 +28,13 @@ export default defineConfig({
               ],
             },
           ],
+        },
+      },
+      {
+        // An adapter is the one place a runtime may be named.
+        files: ["src/adapters/**/*.ts"],
+        rules: {
+          "no-restricted-imports": "off",
         },
       },
       {

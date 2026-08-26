@@ -1,4 +1,4 @@
-import type { Env } from "../../core/ports.ts";
+import type { Env } from "../../ports.ts";
 
 function required(source: Record<string, string | undefined>, name: string): string {
   const value = source[name];

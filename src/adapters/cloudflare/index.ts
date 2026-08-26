@@ -1,5 +1,5 @@
-import type { AppContext, Cache } from "../../core/ports.ts";
-import { createWebhookHandler } from "../../core/webhook.ts";
+import type { AppContext, Cache } from "../../ports.ts";
+import { createWebhookHandler } from "../../webhook.ts";
 import { createGitHubApiFactory } from "../github/octokit.ts";
 import { readEnv } from "../shared/env.ts";
 import { createLogger } from "../shared/logger.ts";
