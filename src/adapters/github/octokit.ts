@@ -88,6 +88,9 @@ class OctokitGitHubApi implements GitHubApi {
     });
 
     const output = { title: input.title, summary: input.summary };
+    // Always sent: `actions` replaces the list, so this clears a button that the
+    // new state no longer offers.
+    const actions = input.actions.map((action) => ({ ...action }));
     const existing = data.check_runs[0];
 
     if (existing !== undefined) {
@@ -98,6 +101,7 @@ class OctokitGitHubApi implements GitHubApi {
         status: "completed",
         conclusion: input.conclusion,
         output,
+        actions,
       });
       return;
     }
@@ -110,6 +114,7 @@ class OctokitGitHubApi implements GitHubApi {
       status: "completed",
       conclusion: input.conclusion,
       output,
+      actions,
     });
   }
 
@@ -177,6 +182,15 @@ class OctokitGitHubApi implements GitHubApi {
     }
   }
 
+  async addLabel(repo: RepoRef, pullNumber: number, label: string): Promise<void> {
+    await this.#octokit.rest.issues.addLabels({
+      owner: repo.owner,
+      repo: repo.repo,
+      issue_number: pullNumber,
+      labels: [label],
+    });
+  }
+
   async removeLabel(repo: RepoRef, pullNumber: number, label: string): Promise<void> {
     try {
       await this.#octokit.rest.issues.removeLabel({
@@ -190,6 +204,25 @@ class OctokitGitHubApi implements GitHubApi {
       if (statusOf(error) !== 404) {
         throw error;
       }
+    }
+  }
+
+  async canPush(repo: RepoRef, login: string): Promise<boolean> {
+    try {
+      const { data } = await this.#octokit.rest.repos.getCollaboratorPermissionLevel({
+        owner: repo.owner,
+        repo: repo.repo,
+        username: login,
+      });
+      // `maintain` and `triage` collapse into `write` and `read` in this field.
+      return data.permission === "admin" || data.permission === "write";
+    } catch (error) {
+      const status = statusOf(error);
+      // Fail closed: not a collaborator, or the app cannot see the answer.
+      if (status === 403 || status === 404) {
+        return false;
+      }
+      throw error;
     }
   }
 

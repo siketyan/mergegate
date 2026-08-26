@@ -76,6 +76,10 @@
           "type": "boolean",
           "default": false
         },
+        "allowCheckAction": {
+          "type": "boolean",
+          "default": true
+        },
         "deleteBranchOnMerge": {
           "type": "boolean",
           "default": false

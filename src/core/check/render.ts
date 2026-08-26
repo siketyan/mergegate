@@ -3,10 +3,26 @@ import type { GateReason } from "../policy/gate.ts";
 
 export type CheckConclusion = "success" | "failure" | "action_required";
 
+/**
+ * A button rendered under the check run in the Checks tab. GitHub caps a label
+ * at 20 characters, a description at 40 and an identifier at 20, and accepts at
+ * most three of them per check run.
+ */
+export interface CheckAction {
+  readonly label: string;
+  readonly description: string;
+  readonly identifier: string;
+}
+
+/** The only button mergegate offers: arm the assisted merge without the label. */
+export const MERGE_ACTION_IDENTIFIER = "merge";
+
 export interface CheckOutput {
   readonly conclusion: CheckConclusion;
   readonly title: string;
   readonly summary: string;
+  /** Empty for every state where there is nothing for a human to press. */
+  readonly actions: readonly CheckAction[];
 }
 
 /** Everything the check run has to be able to say. */
@@ -16,6 +32,8 @@ export type CheckState =
       readonly kind: "awaiting-label";
       readonly strategy: Strategy;
       readonly label: string;
+      /** Whether `merge.allowCheckAction` lets the button stand in for the label. */
+      readonly offerMerge: boolean;
     }
   | { readonly kind: "waiting"; readonly reason: GateReason; readonly label: string }
   | { readonly kind: "merged"; readonly strategy: Strategy }
@@ -31,6 +49,15 @@ const STRATEGY_LABEL: Record<Strategy, string> = {
 
 function capitalise(label: string): string {
   return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function mergeAction(strategy: Strategy): CheckAction {
+  return {
+    label: "Merge now",
+    // 40 characters at most, so it names the strategy and nothing else.
+    description: `Merge with a ${STRATEGY_LABEL[strategy]}`,
+    identifier: MERGE_ACTION_IDENTIFIER,
+  };
 }
 
 const WAITING: Record<GateReason, { title: string; summary: string }> = {
@@ -73,6 +100,7 @@ export function renderCheck(state: CheckState): CheckOutput {
         conclusion: "success",
         title: capitalise(STRATEGY_LABEL[state.strategy]),
         summary: `Merge this pull request with a ${STRATEGY_LABEL[state.strategy]}.`,
+        actions: [],
       };
     case "awaiting-label":
       return {
@@ -80,30 +108,44 @@ export function renderCheck(state: CheckState): CheckOutput {
         title: "Merge commit required",
         summary: [
           `This pull request must be merged with a ${STRATEGY_LABEL[state.strategy]}, which the merge`,
-          `button cannot do here. Add the \`${state.label}\` label and mergegate will merge it for you.`,
-        ].join(" "),
+          `button cannot do here. Add the \`${state.label}\` label`,
+          state.offerMerge ? "or press **Merge now** below," : "",
+          "and mergegate will merge it for you.",
+        ]
+          .filter((part) => part !== "")
+          .join(" "),
+        actions: state.offerMerge ? [mergeAction(state.strategy)] : [],
       };
     case "waiting": {
       const waiting = WAITING[state.reason];
-      return { conclusion: "action_required", title: waiting.title, summary: waiting.summary };
+      // The merge is already armed here, so there is nothing left to press.
+      return {
+        conclusion: "action_required",
+        title: waiting.title,
+        summary: waiting.summary,
+        actions: [],
+      };
     }
     case "merged":
       return {
         conclusion: "success",
         title: "Merged by mergegate",
         summary: `Merged with a ${STRATEGY_LABEL[state.strategy]}.`,
+        actions: [],
       };
     case "merge-failed":
       return {
         conclusion: "action_required",
         title: "Cannot merge",
         summary: state.message,
+        actions: [],
       };
     case "forbidden":
       return {
         conclusion: "failure",
         title: `Pull requests into ${state.base} from ${state.head} are not allowed`,
         summary: `\`${CONFIG_PATH}\` forbids this pair of branches. Retarget the pull request or close it.`,
+        actions: [],
       };
     case "invalid-config":
       return {
@@ -115,6 +157,7 @@ export function renderCheck(state: CheckState): CheckOutput {
           "",
           ...state.errors.map((error) => `- ${error}`),
         ].join("\n"),
+        actions: [],
       };
   }
 }

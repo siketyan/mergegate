@@ -59,6 +59,12 @@ export const configSchema = v.strictObject({
       requireChecks: v.optional(v.boolean(), true),
       requireUpToDate: v.optional(v.boolean(), false),
       allowForkHead: v.optional(v.boolean(), false),
+      /**
+       * Whether the check run offers a "Merge now" button. It is the label by
+       * another name: the same gates apply, and mergegate verifies that whoever
+       * pressed it can push before honouring it.
+       */
+      allowCheckAction: v.optional(v.boolean(), true),
       deleteBranchOnMerge: v.optional(v.boolean(), false),
       removeLabelOnFailure: v.optional(v.boolean(), true),
       commitTitle: v.optional(v.string(), "Merge {head} into {base} (#{number})"),

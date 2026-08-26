@@ -12,6 +12,8 @@ const repository = v.object({
 
 const installation = v.object({ id: v.number() });
 
+const pullRequestRefs = v.optional(v.array(v.object({ number: v.number() })), []);
+
 /** `pull_request` and `pull_request_review` both carry what evaluation needs. */
 export const pullRequestEventSchema = v.object({
   action: v.string(),
@@ -27,7 +29,7 @@ export const checkSuiteEventSchema = v.object({
   check_suite: v.object({
     head_sha: v.string(),
     app: v.object({ id: v.number() }),
-    pull_requests: v.optional(v.array(v.object({ number: v.number() })), []),
+    pull_requests: pullRequestRefs,
   }),
 });
 
@@ -35,10 +37,15 @@ export const checkRunEventSchema = v.object({
   action: v.string(),
   installation,
   repository,
+  /** Only `requested_action` reads it, so a payload without it still parses. */
+  sender: v.optional(v.object({ login: v.string() })),
   check_run: v.object({
     head_sha: v.string(),
     app: v.object({ id: v.number() }),
+    pull_requests: pullRequestRefs,
   }),
+  /** Only on `requested_action`: which button was pressed. */
+  requested_action: v.optional(v.object({ identifier: v.string() })),
 });
 
 export const statusEventSchema = v.object({

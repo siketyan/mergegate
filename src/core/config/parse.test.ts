@@ -26,6 +26,7 @@ test("a minimal file gets every default", () => {
       requireChecks: true,
       requireUpToDate: false,
       allowForkHead: false,
+      allowCheckAction: true,
       deleteBranchOnMerge: false,
       removeLabelOnFailure: true,
       commitTitle: "Merge {head} into {base} (#{number})",

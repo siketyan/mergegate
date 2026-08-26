@@ -15,6 +15,7 @@ export interface FakeGitHubState {
   pullRequests: Map<number, PullRequestState>;
   checkRuns: CheckRunInput[];
   merges: { pullNumber: number; input: MergeInput }[];
+  addedLabels: { pullNumber: number; label: string }[];
   removedLabels: { pullNumber: number; label: string }[];
   deletedBranches: string[];
   /** Sources whose commits the pull request head is deemed to carry. */
@@ -22,6 +23,9 @@ export interface FakeGitHubState {
   carriesQueries: { base: string; head: string; source: string }[];
   mergeOutcome: MergeOutcome;
   ownCheckNames: string[];
+  /** Logins that may push. Anyone else is refused, as in a real repository. */
+  pushers: string[];
+  permissionQueries: string[];
 }
 
 export function pullRequest(overrides: Partial<PullRequestState> = {}): PullRequestState {
@@ -53,12 +57,15 @@ export function createFakeGitHub(initial: Partial<FakeGitHubState> = {}): {
     pullRequests: new Map(),
     checkRuns: [],
     merges: [],
+    addedLabels: [],
     removedLabels: [],
     deletedBranches: [],
     carriedFrom: [],
     carriesQueries: [],
     mergeOutcome: { ok: true, sha: "merged-sha" },
     ownCheckNames: [],
+    pushers: ["maintainer"],
+    permissionQueries: [],
     ...initial,
   };
 
@@ -80,8 +87,15 @@ export function createFakeGitHub(initial: Partial<FakeGitHubState> = {}): {
       state.merges.push({ pullNumber, input });
       return state.mergeOutcome;
     },
+    addLabel: async (_repo, pullNumber, label) => {
+      state.addedLabels.push({ pullNumber, label });
+    },
     removeLabel: async (_repo, pullNumber, label) => {
       state.removedLabels.push({ pullNumber, label });
+    },
+    canPush: async (_repo, login) => {
+      state.permissionQueries.push(login);
+      return state.pushers.includes(login);
     },
     deleteBranch: async (_repo, branch) => {
       state.deletedBranches.push(branch);

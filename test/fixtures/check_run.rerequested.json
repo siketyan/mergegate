@@ -1,0 +1,21 @@
+{
+  "action": "rerequested",
+  "check_run": {
+    "id": 900,
+    "name": "mergegate",
+    "head_sha": "c0ffee0000000000000000000000000000000000",
+    "status": "completed",
+    "conclusion": "action_required",
+    "app": { "id": 1234, "slug": "mergegate" },
+    "pull_requests": [{ "number": 12 }]
+  },
+  "repository": {
+    "id": 1,
+    "name": "mergegate",
+    "full_name": "siketyan/mergegate",
+    "default_branch": "main",
+    "owner": { "login": "siketyan", "type": "User" }
+  },
+  "sender": { "login": "maintainer", "type": "User" },
+  "installation": { "id": 42 }
+}
