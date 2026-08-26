@@ -72,6 +72,20 @@ test/
 Unit tests live next to the code they cover as `*.test.ts`. `test/` holds fixtures and anything shared
 between test files.
 
+The entry point is a plain `(request: Request) => Promise<Response>` plus four ports, which is all another
+runtime has to provide:
+
+| Port       | Responsibility                            | Cloudflare implementation |
+| ---------- | ----------------------------------------- | ------------------------- |
+| `Env`      | Secrets and settings                      | Worker `env` bindings     |
+| `Deferrer` | Work that continues after the response    | `ctx.waitUntil`           |
+| `Cache`    | Config cache and deduplication (optional) | Workers KV                |
+| `Logger`   | Structured logging                        | `console` (JSON)          |
+
+`schema/` is also the Workers assets directory, with `not_found_handling: "none"` so that everything which
+is not an asset still reaches the Worker. A request that matches one never reaches the script, which is why
+serving the JSON Schema costs no invocations.
+
 **Dependencies always point `adapters -> core`.**
 
 - Never import from `adapters` inside `core`.
@@ -146,6 +160,12 @@ These map directly onto promises the README makes to users. Do not break them.
   generated artefacts are committed, excluded from the formatter, and checked for drift in CI.
 - `mergeable` is computed asynchronously and can be `null`. Treat that as undetermined and re-fetch with a
   short backoff — but do not wait forever.
+- `statusCheckRollup.contexts` pages at 100. Walk the rest against the head commit, bound the walk, and
+  report a rollup that could not be read to the end as truncated: an unread check is not a passing one, so
+  the gate must refuse rather than merge on the part it saw.
+- Decide `includeTransitive` from two merge bases — where the base and the source last agreed, against how
+  much of the source the head has. Never from tip containment: that answer changes the moment someone
+  pushes to the source branch while the pull request is open.
 - A merge method disabled in repository settings returns 405 from the API too. Surface the message in the
   check output as-is.
 - Install retry and throttling plugins for rate limits and secondary rate limits.

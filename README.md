@@ -158,9 +158,9 @@ and set `merge.allowCheckAction: false` to take it away and leave the label as t
 ### Re-run
 
 The check's **Re-run** button re-evaluates the pull request from scratch — the branch pair, the gates and
-the check run output — and rewrites the check. The app remembers nothing between deliveries, so pressing
-it is always safe: it is how you ask for a fresh answer when a delivery was missed or a condition changed
-without an event of its own. **Re-run all checks** does the same.
+the check run output — and rewrites the check. Pressing it is always safe, and it is how you ask for a fresh
+answer when a delivery was missed or a condition changed without an event of its own. **Re-run all checks**
+does the same.
 
 ---
 
@@ -317,13 +317,9 @@ conflict. There are two ways to catch it.
 ```
 
 This asks the history instead of trusting a naming convention, so a branch named `wip`, `fix-conflicts` or
-anything else is caught just the same. What it compares is where the base and the source last agreed against
-how much of the source the head has — not the source's tip — so the answer does not change when someone
-pushes to `develop` while the pull request is open.
-
-It costs two or three comparisons against the GitHub API per evaluation, and only for rules that opt in:
-a configuration without `includeTransitive` makes no extra calls at all. The head branch of the rule has to
-name a branch (`develop`), not only a pattern — there is no history to follow from `release/*`.
+anything else is caught just the same, and the answer does not change when someone pushes to `develop` while
+the pull request is open. The head branch of the rule has to name a branch (`develop`), not only a pattern —
+there is no history to follow from `release/*`.
 
 One consequence worth knowing: a feature branch cut from `develop` and pointed at `staging` also carries
 develop's commits, so it matches too. That is the honest answer rather than an accident — merging it does
@@ -493,12 +489,9 @@ right base branch — changing the base triggers a fresh evaluation — or close
 The first row's title names whichever strategy `merge.manual` lists, so a repository whose humans merge with
 merge commits sees `Merge commit` there instead.
 
-The `Labelled` rows read the same way for a pull request whose merge was asked for with **Merge now**, with
-one difference the summary spells out: a labelled pull request is one mergegate comes back to, an unlabelled
-one is not. So the **Merge now** button stays on every state where nothing is going to happen by itself —
-`Merge commit required`, an unlabelled wait, and an unlabelled `Cannot merge` — and is absent wherever
-mergegate is already going to act, where `merge.allowCheckAction` is off, and on
-`Cannot read every check on this commit`, which no press could clear either.
+The `Labelled` rows read the same way after a **Merge now** press, with one difference the summary spells
+out: a labelled pull request is one mergegate comes back to, an unlabelled one is not. So the button stays
+wherever nothing is going to happen by itself, and is absent wherever mergegate is already going to act.
 
 Both `action_required` and `failure` count as failing for a required status check, so either blocks the
 merge. The check is flipped to `success` after an assisted merge so that merged PRs do not carry a red X in
@@ -516,12 +509,11 @@ Even with the `ready-to-merge` label present, the app merges only once all of th
 
 - The PR is open and not a draft
 - `mergeable` is true (no conflict with the base). GitHub computes this asynchronously, so a freshly
-  labelled PR often has no answer yet; mergegate waits a few seconds for one rather than leaving the PR
-  blocked until some other event wakes it. If it still has not settled, the check says so and the label can
-  be re-added — or **Merge now** pressed again
-- With `merge.requireChecks: true`, every check run and commit status other than `mergegate` is
-  success, neutral or skipped. Checks are read past the first page of GitHub's rollup; a commit carrying
-  more than 1,100 of them is refused rather than merged on the part that was read
+  labelled PR often has no answer yet; mergegate waits a few seconds rather than leaving it blocked until
+  some other event wakes it. If it still has not settled, the check says so and the label can be re-added —
+  or **Merge now** pressed again
+- With `merge.requireChecks: true`, every check run and commit status other than `mergegate` is success,
+  neutral or skipped
 - With `merge.requireApproval: true`, `reviewDecision` is `APPROVED` or reviews are not required (`null`).
   `CHANGES_REQUESTED` is always refused
 - With `merge.requireUpToDate: true`, the head is up to date with the base
@@ -581,15 +573,10 @@ sends the first two to apps with **Checks: read & write** — which the table ab
   has no effect on that PR.
 - **Signatures are verified.** `X-Hub-Signature-256` is checked with HMAC-SHA256 using a constant-time
   comparison; anything else is rejected with 401.
-- **Labelling requires write access**, so the trigger for an assisted merge rides on GitHub's own permission
-  model.
-- **The app ignores its own results.** A `check_run.completed` event for a check run mergegate created is
-  dropped, so it cannot loop. The **Re-run** and **Merge now** presses are the opposite case: GitHub sends
-  those only to the app that owns the check run, so they are acted on precisely when the check run is ours.
-- **Merging from the Checks tab requires write access**, checked against GitHub's permission API before the
-  press is honoured, and the press is tied to the commit it was rendered on. It merges or it does not: the
-  app never writes a label to stand in for you. `merge.allowCheckAction: false` removes the button and stops
-  the app from honouring it at all.
+- **Both triggers require write access.** Labelling rides on GitHub's own permission model, and a
+  **Merge now** press is checked against GitHub's permission API before it is honoured. See
+  [Merging from the Checks tab](#merging-from-the-checks-tab); `merge.allowCheckAction: false` removes the
+  button altogether.
 - **No state is owned by the app.** Everything needed for a decision comes from the GitHub API. The only
   things persisted are a config cache and delivery-ID deduplication, and losing either is harmless.
 
@@ -597,15 +584,8 @@ sends the first two to apps with **Checks: read & write** — which the table ab
 
 ## Self-hosting
 
-mergegate targets Cloudflare Workers, but its core is **runtime-agnostic**.
-
-```
-src/
-  core/        Pure logic (policy, config, event handling) on web standard APIs only
-  adapters/
-    github/      GitHub API client
-    cloudflare/  Workers entry point
-```
+mergegate targets Cloudflare Workers, but its core is **runtime-agnostic**: everything runtime-specific sits
+behind four ports, implemented under `src/adapters/`, so another runtime is an adapter rather than a fork.
 
 ### Cloudflare Workers
 
@@ -621,9 +601,8 @@ The webhook URL is `https://<your-worker>/webhooks/github`. Health check: `GET /
 validates the secrets: a 500 there names what is wrong with them (a PKCS#1 key, a mangled PEM, an app
 slug where the numeric id belongs) instead of failing later on the first API call.
 
-`GET /mergegate.schema.json` serves the configuration schema, as a Workers static asset rather than from the
-Worker itself: matching requests never reach the script, so it costs no invocations and cannot slow a
-delivery down.
+`GET /mergegate.schema.json` serves the configuration schema, so a repository can point its editor at the
+deployment it actually talks to.
 
 > [!IMPORTANT]
 > GitHub hands you a PKCS#1 private key, but WebCrypto wants PKCS#8. Convert it first:
@@ -631,20 +610,6 @@ delivery down.
 > ```console
 > $ openssl pkcs8 -topk8 -inform PEM -outform PEM -nocrypt -in app.private-key.pem -out app.pkcs8.pem
 > ```
-
-### Porting to another runtime
-
-The core needs nothing but these ports. Implement them and it runs anywhere.
-
-| Port       | Responsibility                            | Cloudflare implementation |
-| ---------- | ----------------------------------------- | ------------------------- |
-| `Env`      | Secrets and settings                      | Worker `env` bindings     |
-| `Deferrer` | Work that continues after the response    | `ctx.waitUntil`           |
-| `Cache`    | Config cache and deduplication (optional) | Workers KV                |
-| `Logger`   | Structured logging                        | `console` (JSON)          |
-
-The entry point is a plain `(request: Request) => Promise<Response>`, so another runtime needs an entry point
-that hands it a `Request` and the four ports above — nothing in `core/` changes.
 
 ---
 
@@ -654,7 +619,6 @@ that hands it a `Request` and the four ports above — nothing in `core/` change
   stop a human from choosing "Create a merge commit". Always configure Allowed merge methods.
 - **Not compatible with merge queues.** A merge queue picks the merge method itself and conflicts with the
   assisted merge.
-- **If the app is down, merges stop**, because the required check is never reported (fail-closed).
 - **PRs from forks** are always treated as squash candidates by default.
 
 ## Roadmap
