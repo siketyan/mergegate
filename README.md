@@ -400,8 +400,11 @@ merge:
   allowCheckAction: true # Offer a "Merge now" button on the check run
   deleteBranchOnMerge: false # Delete the head branch after merging
   removeLabelOnFailure: true # Drop the label on a permanent failure so re-adding retries
-  commitTitle: "Merge {head} into {base} (#{number})"
-  commitMessage: "" # Empty means GitHub's default
+  # Both unset by default: mergegate sends no title or message, so GitHub writes
+  # the one your repository settings call for. Set either to override it;
+  # {base}, {head}, {number} and {title} are substituted.
+  # commitTitle: "Merge {head} into {base} (#{number})"
+  # commitMessage: ""
 
 rules:
   - base: staging # Required. Pattern for the base branch

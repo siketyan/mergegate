@@ -76,8 +76,9 @@ export interface MergeInput {
   readonly method: Strategy;
   /** The head SHA that was evaluated. A different head must abort the merge. */
   readonly sha: string;
-  readonly commitTitle: string;
-  readonly commitMessage: string;
+  /** Left out entirely when the configuration names neither. */
+  readonly commitTitle?: string;
+  readonly commitMessage?: string;
 }
 
 export type MergeOutcome =

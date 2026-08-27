@@ -57,12 +57,17 @@ async function merge(
   strategy: Strategy,
 ): Promise<MergeOutcome> {
   const values = commitValues(pullRequest);
+  const { commitTitle, commitMessage } = config.merge;
   return api.mergePullRequest(repo, pullRequest.number, {
     method: strategy,
     // The SHA that was evaluated: a commit pushed since must not be merged.
     sha: pullRequest.headSha,
-    commitTitle: renderTemplate(config.merge.commitTitle, values),
-    commitMessage: renderTemplate(config.merge.commitMessage, values),
+    // A key the configuration does not set is not sent, so GitHub writes the
+    // message its own settings call for.
+    ...(commitTitle === undefined ? {} : { commitTitle: renderTemplate(commitTitle, values) }),
+    ...(commitMessage === undefined
+      ? {}
+      : { commitMessage: renderTemplate(commitMessage, values) }),
   });
 }
 
