@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/siketyan/mergegate/compare/mergegate-v1.0.0...mergegate-v1.0.1) (2026-08-27)
+
+
+### Bug Fixes
+
+* leave the merge commit message to GitHub unless configured ([#21](https://github.com/siketyan/mergegate/issues/21)) ([b3e7051](https://github.com/siketyan/mergegate/commit/b3e7051c6a9f75c1299e263739d93a753415ef83))
+
 ## 1.0.0 (2026-08-26)
 
 
