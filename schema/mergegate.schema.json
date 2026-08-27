@@ -89,12 +89,10 @@
           "default": true
         },
         "commitTitle": {
-          "type": "string",
-          "default": "Merge {head} into {base} (#{number})"
+          "type": "string"
         },
         "commitMessage": {
-          "type": "string",
-          "default": ""
+          "type": "string"
         }
       },
       "required": [],

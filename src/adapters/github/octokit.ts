@@ -224,8 +224,8 @@ class OctokitGitHubApi implements GitHubApi {
         pull_number: pullNumber,
         merge_method: input.method,
         sha: input.sha,
-        ...(input.commitTitle === "" ? {} : { commit_title: input.commitTitle }),
-        ...(input.commitMessage === "" ? {} : { commit_message: input.commitMessage }),
+        ...(input.commitTitle === undefined ? {} : { commit_title: input.commitTitle }),
+        ...(input.commitMessage === undefined ? {} : { commit_message: input.commitMessage }),
       });
       return { ok: true, sha: data.sha };
     } catch (error) {

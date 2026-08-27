@@ -29,8 +29,7 @@ test("a minimal file gets every default", () => {
       allowCheckAction: true,
       deleteBranchOnMerge: false,
       removeLabelOnFailure: true,
-      commitTitle: "Merge {head} into {base} (#{number})",
-      commitMessage: "",
+      // No commitTitle and no commitMessage: unset means GitHub's own default.
     },
     rules: [],
   });
