@@ -82,8 +82,13 @@ export const configSchema = v.strictObject({
       allowCheckAction: v.optional(v.boolean(), true),
       deleteBranchOnMerge: v.optional(v.boolean(), false),
       removeLabelOnFailure: v.optional(v.boolean(), true),
-      commitTitle: v.optional(v.string(), "Merge {head} into {base} (#{number})"),
-      commitMessage: v.optional(v.string(), ""),
+      /**
+       * Unset means GitHub's own default for the merge method and the
+       * repository's settings — mergegate sends no title or message at all
+       * rather than inventing one.
+       */
+      commitTitle: v.optional(v.string()),
+      commitMessage: v.optional(v.string()),
     }),
     {},
   ),

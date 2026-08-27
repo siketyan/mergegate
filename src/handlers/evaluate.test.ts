@@ -76,12 +76,9 @@ test("a labelled pull request is merged with the evaluated head SHA", async () =
   expect(state.merges).toEqual([
     {
       pullNumber: 12,
-      input: {
-        method: "merge",
-        sha: "c0ffee",
-        commitTitle: "Merge develop into staging (#12)",
-        commitMessage: "",
-      },
+      // No commit title or message: the configuration names neither, so the
+      // merge call carries neither and GitHub writes its own.
+      input: { method: "merge", sha: "c0ffee" },
     },
   ]);
   expect(state.checkRuns.at(-1)).toMatchObject({
@@ -225,18 +222,42 @@ test("the button offered on an unlabelled pull request names the strategy", asyn
   ]);
 });
 
+test("a configured commit title and message are rendered and sent", async () => {
+  const state = await run(
+    {
+      configSource: `
+version: 1
+merge:
+  commitTitle: "Merge {head} into {base} (#{number})"
+  commitMessage: "{title}"
+rules:
+  - base: staging
+    head: develop
+    strategy: merge
+  - base: "**"
+    strategy: squash
+`,
+    },
+    { labels: ["ready-to-merge"] },
+  );
+
+  expect(state.merges[0]?.input).toEqual({
+    method: "merge",
+    sha: "c0ffee",
+    commitTitle: "Merge develop into staging (#12)",
+    commitMessage: "Promote develop",
+  });
+});
+
 test("a press of the button merges without the label", async () => {
   const state = await run({}, {}, PRESSED);
   expect(state.permissionQueries).toEqual(["maintainer"]);
   expect(state.merges).toEqual([
     {
       pullNumber: 12,
-      input: {
-        method: "merge",
-        sha: "c0ffee",
-        commitTitle: "Merge develop into staging (#12)",
-        commitMessage: "",
-      },
+      // No commit title or message: the configuration names neither, so the
+      // merge call carries neither and GitHub writes its own.
+      input: { method: "merge", sha: "c0ffee" },
     },
   ]);
   expect(state.checkRuns.at(-1)).toMatchObject({
