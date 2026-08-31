@@ -70,7 +70,7 @@ test("checks beyond the first page still gate the merge", () => {
   const state = toPullRequestState(
     response({ contexts: [checkRun("build", "SUCCESS")], hasNextPage: true }),
     "mergegate",
-    [checkRun("e2e", "FAILURE")],
+    { contexts: [checkRun("e2e", "FAILURE")] },
   );
 
   expect(state?.otherChecks).toEqual(["success", "failure"]);
@@ -80,7 +80,7 @@ test("our own check is dropped wherever in the rollup it lands", () => {
   const state = toPullRequestState(
     response({ contexts: [checkRun("mergegate", "ACTION_REQUIRED")] }),
     "mergegate",
-    [checkRun("mergegate", "ACTION_REQUIRED"), checkRun("lint", "SUCCESS")],
+    { contexts: [checkRun("mergegate", "ACTION_REQUIRED"), checkRun("lint", "SUCCESS")] },
   );
 
   expect(state?.otherChecks).toEqual(["success"]);
@@ -90,16 +90,30 @@ test("an unread page of the rollup is carried into the state", () => {
   const state = toPullRequestState(
     response({ contexts: [checkRun("build", "SUCCESS")], hasNextPage: true }),
     "mergegate",
-    [],
-    true,
+    { truncated: true },
   );
 
   expect(state?.checksTruncated).toBe(true);
 });
 
+test("a refused check in the rollup is carried into the state", () => {
+  // The failure this covers: GitHub nulls the context it refused, so a rollup
+  // read as-is looks like every check passed.
+  const state = toPullRequestState(
+    response({ contexts: [checkRun("build", "SUCCESS"), null] }),
+    "mergegate",
+    { refused: true },
+  );
+
+  expect(state?.otherChecks).toEqual(["success"]);
+  expect(state?.checksRefused).toBe(true);
+  expect(state?.checksTruncated).toBe(false);
+});
+
 test("a rollup read to the end is not truncated", () => {
   const state = toPullRequestState(response({ contexts: [] }), "mergegate");
   expect(state?.checksTruncated).toBe(false);
+  expect(state?.checksRefused).toBe(false);
 });
 
 test("a pull request that is gone has no rollup to page through", () => {

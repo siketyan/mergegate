@@ -39,7 +39,7 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-interface GraphqlErrorEntry {
+export interface GraphqlErrorEntry {
   /** `FORBIDDEN`, `NOT_FOUND`, ... */
   readonly type: string | null;
   /** `repository.pullRequest.commits.nodes.0.commit.statusCheckRollup`. */
@@ -53,7 +53,7 @@ interface GraphqlErrorEntry {
  * was is the difference between "the app is broken" and "the app is missing one
  * permission". GitHub does not put it in the message, so it is read off here.
  */
-function graphqlErrors(error: unknown): readonly GraphqlErrorEntry[] {
+export function graphqlErrors(error: unknown): readonly GraphqlErrorEntry[] {
   if (typeof error !== "object" || error === null || !("errors" in error)) {
     return [];
   }
@@ -101,6 +101,49 @@ export function toGraphqlError(error: unknown): GitHubApiError {
   );
 }
 
+/** Where in the query a refused rollup context shows up. */
+const ROLLUP_CONTEXTS = "statusCheckRollup.contexts";
+
+/**
+ * Whether every error GitHub raised was about a context inside the rollup.
+ *
+ * GraphQL refuses one field at a time: a commit status the installation may not
+ * read (that is `Commit statuses: read`, which is a permission of its own,
+ * separate from Checks) comes back as a null node with an error beside it,
+ * while the rest of the answer is intact. That is worth carrying on with --
+ * deciding how a pull request may be merged needs no checks at all. What it is
+ * not worth is merging on it, and `refused` is what stops that.
+ */
+export function refusedRollupOnly(entries: readonly GraphqlErrorEntry[]): boolean {
+  return (
+    entries.length > 0 && entries.every((entry) => entry.path?.includes(ROLLUP_CONTEXTS) === true)
+  );
+}
+
+/**
+ * The partial answer that came with the errors, if it holds a pull request.
+ *
+ * GraphQL nulls only the field it refused, so everything else keeps the shape
+ * codegen describes -- rollup context nodes are already typed nullable.
+ */
+export function partialPullRequest(error: unknown): PullRequestStateQuery | null {
+  if (typeof error !== "object" || error === null || !("data" in error)) {
+    return null;
+  }
+  const data = (error as { data: unknown }).data;
+  if (typeof data !== "object" || data === null || !("repository" in data)) {
+    return null;
+  }
+  const repository = (data as { repository: unknown }).repository;
+  if (typeof repository !== "object" || repository === null || !("pullRequest" in repository)) {
+    return null;
+  }
+  const pullRequest = (repository as { pullRequest: unknown }).pullRequest;
+  return typeof pullRequest === "object" && pullRequest !== null
+    ? (data as PullRequestStateQuery)
+    : null;
+}
+
 class OctokitGitHubApi implements GitHubApi {
   readonly #octokit: AppOctokitInstance;
   readonly #appId: number;
@@ -143,17 +186,38 @@ class OctokitGitHubApi implements GitHubApi {
     pullNumber: number,
     options: { readonly ownCheckName: string },
   ): Promise<PullRequestState | null> {
-    const response = await this.#graphql<PullRequestStateQuery>(pullRequestQuery, {
-      owner: repo.owner,
-      repo: repo.repo,
-      number: pullNumber,
-      // `mergeStateStatus` still lives behind this media type.
-      headers: { accept: "application/vnd.github.merge-info-preview+json" },
-    });
+    const { response, refused } = await this.#pullRequest(repo, pullNumber);
     // A check beyond the first page of the rollup still gates the merge, so the
     // rest of it is read rather than assumed to be empty.
     const rest = await this.#restOfRollup(repo, response);
-    return toPullRequestState(response, options.ownCheckName, rest.contexts, rest.truncated);
+    return toPullRequestState(response, options.ownCheckName, {
+      contexts: rest.contexts,
+      truncated: rest.truncated,
+      refused: refused || rest.refused,
+    });
+  }
+
+  /** The pull request, and whether GitHub refused any of its rollup contexts. */
+  async #pullRequest(
+    repo: RepoRef,
+    pullNumber: number,
+  ): Promise<{ readonly response: PullRequestStateQuery; readonly refused: boolean }> {
+    try {
+      const response = await this.#octokit.graphql<PullRequestStateQuery>(pullRequestQuery, {
+        owner: repo.owner,
+        repo: repo.repo,
+        number: pullNumber,
+        // `mergeStateStatus` still lives behind this media type.
+        headers: { accept: "application/vnd.github.merge-info-preview+json" },
+      });
+      return { response, refused: false };
+    } catch (error) {
+      const partial = refusedRollupOnly(graphqlErrors(error)) ? partialPullRequest(error) : null;
+      if (partial === null) {
+        throw toGraphqlError(error);
+      }
+      return { response: partial, refused: true };
+    }
   }
 
   async #restOfRollup(
@@ -162,15 +226,16 @@ class OctokitGitHubApi implements GitHubApi {
   ): Promise<{
     readonly contexts: readonly (RollupContextFragment | null)[];
     readonly truncated: boolean;
+    readonly refused: boolean;
   }> {
     const first = rollupPage(response);
     if (!first.hasNextPage) {
-      return { contexts: [], truncated: false };
+      return { contexts: [], truncated: false, refused: false };
     }
     if (first.oid === null || first.endCursor === null) {
       // GitHub says there is more but not where to carry on from. Nothing to
       // read, and nothing to claim about the checks that were not read.
-      return { contexts: [], truncated: true };
+      return { contexts: [], truncated: true, refused: false };
     }
 
     const contexts: (RollupContextFragment | null)[] = [];
@@ -191,13 +256,13 @@ class OctokitGitHubApi implements GitHubApi {
           ? object.statusCheckRollup
           : null;
       if (rollup === null || rollup === undefined) {
-        return { contexts, truncated: true };
+        return { contexts, truncated: true, refused: false };
       }
       contexts.push(...(rollup.contexts.nodes ?? []));
       after = rollup.contexts.pageInfo.hasNextPage ? rollup.contexts.pageInfo.endCursor : null;
     }
     // `after` still set means the page bound stopped the walk, not GitHub.
-    return { contexts, truncated: after !== null };
+    return { contexts, truncated: after !== null, refused: false };
   }
 
   async upsertCheckRun(repo: RepoRef, input: CheckRunInput): Promise<void> {

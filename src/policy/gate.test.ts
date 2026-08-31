@@ -13,6 +13,7 @@ function input(overrides: Partial<GateInput> = {}): GateInput {
     reviewDecision: "APPROVED",
     otherChecks: ["success"],
     checksTruncated: false,
+    checksRefused: false,
     ...overrides,
   };
 }
@@ -102,5 +103,20 @@ test("a rollup mergegate could not read to the end blocks the merge", () => {
 test("an unreadable rollup does not matter when checks are not required", () => {
   expect(
     evaluateGate(input({ checksTruncated: true }), { ...settings, requireChecks: false }),
+  ).toEqual({ ready: true });
+});
+
+test("a check GitHub refused blocks the merge", () => {
+  // An unread check is not a passing one: the refused context comes back null
+  // and would otherwise vanish from otherChecks entirely.
+  expect(evaluateGate(input({ checksRefused: true }), settings)).toEqual({
+    ready: false,
+    reason: "checks-refused",
+  });
+});
+
+test("a check GitHub refused stops mattering without requireChecks", () => {
+  expect(
+    evaluateGate(input({ checksRefused: true }), { ...settings, requireChecks: false }),
   ).toEqual({ ready: true });
 });
