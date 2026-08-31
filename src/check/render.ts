@@ -55,7 +55,14 @@ export type CheckState =
       readonly offerMerge: boolean;
     }
   | { readonly kind: "forbidden"; readonly base: string; readonly head: string }
-  | { readonly kind: "invalid-config"; readonly errors: readonly string[] };
+  | { readonly kind: "invalid-config"; readonly errors: readonly string[] }
+  | {
+      /** GitHub refused a call, so there is no decision to report. */
+      readonly kind: "error";
+      readonly message: string;
+      /** A 401 or 403: a permission a human has to grant, not a hiccup. */
+      readonly forbidden: boolean;
+    };
 
 const STRATEGY_LABEL: Record<Strategy, string> = {
   squash: "squash merge",
@@ -232,6 +239,38 @@ export function renderCheck(state: CheckState): CheckOutput {
         conclusion: "failure",
         title: `Pull requests into ${state.base} from ${state.head} are not allowed`,
         summary: `\`${CONFIG_PATH}\` forbids this pair of branches. Retarget the pull request or close it.`,
+        actions: [],
+      };
+    case "error":
+      return {
+        // Fail closed: mergegate could not decide, so it must not read as a
+        // pull request that is free to be merged.
+        conclusion: "failure",
+        title: state.forbidden
+          ? "mergegate is missing a permission"
+          : "mergegate could not evaluate this pull request",
+        summary: (state.forbidden
+          ? [
+              "GitHub refused a call mergegate needs to make:",
+              "",
+              `> ${state.message}`,
+              "",
+              "The installation is missing a permission. Check the app's repository permissions" +
+                " (Checks: read & write, Contents: read & write, Pull requests: read & write," +
+                " Metadata: read), and that this installation has **accepted** them: adding a" +
+                " permission to a GitHub App leaves every existing installation on the old set" +
+                " until its owner approves the request, and every call is refused until they do.",
+              "",
+              "Re-run this check once the permissions are in place.",
+            ]
+          : [
+              "mergegate could not decide how this pull request may be merged:",
+              "",
+              `> ${state.message}`,
+              "",
+              "Re-run this check to try again.",
+            ]
+        ).join("\n"),
         actions: [],
       };
     case "invalid-config":

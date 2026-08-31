@@ -138,3 +138,45 @@ export interface AppContext {
   readonly env: Env;
   readonly cache?: Cache;
 }
+
+/**
+ * A GitHub API call that came back an error.
+ *
+ * Every call the adapter makes is wrapped in one of these, so a failure carries
+ * the endpoint that produced it: "Resource not accessible by integration" says
+ * nothing on its own, and an app that cannot say which call was refused cannot
+ * be debugged from its logs. The core reads `forbidden` to tell a permission
+ * problem -- which no retry fixes and which a human has to act on -- from the
+ * rest.
+ */
+export class GitHubApiError extends Error {
+  readonly status: number | null;
+  readonly method: string | null;
+  /** The route, as Octokit names it: `GET /repos/{owner}/{repo}/pulls/{n}`. */
+  readonly url: string | null;
+
+  constructor(
+    message: string,
+    details: {
+      readonly status?: number | null;
+      readonly method?: string | null;
+      readonly url?: string | null;
+    } = {},
+  ) {
+    super(message);
+    this.name = "GitHubApiError";
+    this.status = details.status ?? null;
+    this.method = details.method ?? null;
+    this.url = details.url ?? null;
+  }
+
+  /** 401 and 403: the installation may not do this, and retrying changes nothing. */
+  get forbidden(): boolean {
+    return this.status === 401 || this.status === 403;
+  }
+
+  /** What belongs on a log line next to the message. */
+  fields(): Record<string, unknown> {
+    return { status: this.status, method: this.method, url: this.url };
+  }
+}
