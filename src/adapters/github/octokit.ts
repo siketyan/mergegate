@@ -3,16 +3,17 @@ import { Octokit } from "@octokit/core";
 import { restEndpointMethods } from "@octokit/plugin-rest-endpoint-methods";
 import { retry } from "@octokit/plugin-retry";
 import { throttling } from "@octokit/plugin-throttling";
-import type {
-  CheckRunInput,
-  Env,
-  GitHubApi,
-  GitHubApiFactory,
-  Logger,
-  MergeInput,
-  MergeOutcome,
-  PullRequestState,
-  RepoRef,
+import {
+  type CheckRunInput,
+  type Env,
+  type GitHubApi,
+  GitHubApiError,
+  type GitHubApiFactory,
+  type Logger,
+  type MergeInput,
+  type MergeOutcome,
+  type PullRequestState,
+  type RepoRef,
 } from "../../ports.ts";
 import { decodeContent } from "./content.ts";
 import type {
@@ -38,6 +39,39 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+/** The `type` of every entry in a GraphQL error response, or nothing. */
+function graphqlErrorTypes(error: unknown): readonly string[] {
+  if (typeof error !== "object" || error === null || !("errors" in error)) {
+    return [];
+  }
+  const errors = (error as { errors: unknown }).errors;
+  if (!Array.isArray(errors)) {
+    return [];
+  }
+  return errors.flatMap((entry: unknown) =>
+    typeof entry === "object" && entry !== null && "type" in entry
+      ? [String((entry as { type: unknown }).type)]
+      : [],
+  );
+}
+
+/**
+ * GraphQL answers 200 even when it refuses a field, so a refusal has to be read
+ * off the error entries rather than off the status line. Without this a missing
+ * permission on the pull request query looks like an ordinary crash.
+ */
+function toGraphqlError(error: unknown): GitHubApiError {
+  if (error instanceof GitHubApiError) {
+    return error;
+  }
+  const forbidden = graphqlErrorTypes(error).includes("FORBIDDEN");
+  return new GitHubApiError(messageOf(error), {
+    status: forbidden ? 403 : statusOf(error),
+    method: "POST",
+    url: "/graphql",
+  });
+}
+
 class OctokitGitHubApi implements GitHubApi {
   readonly #octokit: AppOctokitInstance;
   readonly #appId: number;
@@ -45,6 +79,15 @@ class OctokitGitHubApi implements GitHubApi {
   constructor(octokit: AppOctokitInstance, appId: number) {
     this.#octokit = octokit;
     this.#appId = appId;
+  }
+
+  /** Every GraphQL call, so a refused field reads like a refused request. */
+  async #graphql<T>(query: string, variables: Record<string, unknown>): Promise<T> {
+    try {
+      return await this.#octokit.graphql<T>(query, variables);
+    } catch (error) {
+      throw toGraphqlError(error);
+    }
   }
 
   async readDefaultBranchFile(repo: RepoRef, path: string): Promise<string | null> {
@@ -71,7 +114,7 @@ class OctokitGitHubApi implements GitHubApi {
     pullNumber: number,
     options: { readonly ownCheckName: string },
   ): Promise<PullRequestState | null> {
-    const response = await this.#octokit.graphql<PullRequestStateQuery>(pullRequestQuery, {
+    const response = await this.#graphql<PullRequestStateQuery>(pullRequestQuery, {
       owner: repo.owner,
       repo: repo.repo,
       number: pullNumber,
@@ -107,7 +150,7 @@ class OctokitGitHubApi implements GitHubApi {
     // a repository problem, not something to page through forever.
     for (let page = 0; page < 10 && after !== null; page += 1) {
       const next: PullRequestCheckContextsQuery =
-        await this.#octokit.graphql<PullRequestCheckContextsQuery>(checkContextsQuery, {
+        await this.#graphql<PullRequestCheckContextsQuery>(checkContextsQuery, {
           owner: repo.owner,
           repo: repo.repo,
           oid: first.oid,
@@ -327,6 +370,23 @@ export function createGitHubApiFactory(env: Env, logger: Logger): GitHubApiFacto
           },
         },
       });
+
+      // Outermost of the plugins' own hooks, so this sees the failure that
+      // survived the retries -- with the route that produced it attached.
+      octokit.hook.wrap("request", async (request, options) => {
+        try {
+          return await request(options);
+        } catch (error) {
+          throw error instanceof GitHubApiError
+            ? error
+            : new GitHubApiError(messageOf(error), {
+                status: statusOf(error),
+                method: options.method,
+                url: options.url,
+              });
+        }
+      });
+
       return new OctokitGitHubApi(octokit, appId);
     },
   };

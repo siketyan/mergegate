@@ -223,3 +223,24 @@ test("the identifier the webhook is matched against is the one on the button", (
   }).actions;
   expect(action?.identifier).toBe(MERGE_ACTION_IDENTIFIER);
 });
+
+test("a refused call fails the check and names the permission problem", () => {
+  const output = renderCheck({
+    kind: "error",
+    message: "Resource not accessible by integration",
+    forbidden: true,
+  });
+  expect(output.conclusion).toBe("failure");
+  expect(output.title).toBe("mergegate is missing a permission");
+  expect(output.summary).toContain("Resource not accessible by integration");
+  expect(output.summary).toContain("accepted");
+  expect(output.actions).toEqual([]);
+});
+
+test("any other failure fails the check without blaming permissions", () => {
+  const output = renderCheck({ kind: "error", message: "boom", forbidden: false });
+  expect(output.conclusion).toBe("failure");
+  expect(output.title).toBe("mergegate could not evaluate this pull request");
+  expect(output.summary).toContain("boom");
+  expect(output.summary).not.toContain("permission");
+});

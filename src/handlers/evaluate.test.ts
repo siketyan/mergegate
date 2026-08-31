@@ -6,7 +6,7 @@ import {
   pullRequest,
   repo,
 } from "../../test/fake-github.ts";
-import type { PullRequestState } from "../ports.ts";
+import { type GitHubApi, GitHubApiError, type PullRequestState } from "../ports.ts";
 import { type EvaluateOptions, evaluatePullRequest } from "./evaluate.ts";
 
 const CONFIG = `
@@ -393,4 +393,108 @@ test("a push during the wait hands the pull request to its own event", async () 
   // Nothing is written against a head that is no longer current.
   expect(state.checkRuns).toHaveLength(0);
   expect(state.merges).toHaveLength(0);
+});
+
+test("a refused API call fails the check run instead of leaving nothing", async () => {
+  const pull = pullRequest();
+  const { api, state } = createFakeGitHub({
+    configSource: CONFIG,
+    pullRequests: new Map([[pull.number, pull]]),
+  });
+  const refused = new GitHubApiError("Resource not accessible by integration", {
+    status: 403,
+    method: "POST",
+    url: "/graphql",
+  });
+  const failing: GitHubApi = {
+    ...api,
+    getPullRequestState: async () => {
+      throw refused;
+    },
+  };
+  const { context } = createTestContext(failing);
+
+  // The head only exists in the delivery: the pull request was never read.
+  await evaluatePullRequest(context, failing, repo, pull.number, { headSha: "c0ffee" });
+
+  expect(state.checkRuns).toHaveLength(1);
+  expect(state.checkRuns[0]).toMatchObject({
+    name: "mergegate",
+    headSha: "c0ffee",
+    conclusion: "failure",
+    title: "mergegate is missing a permission",
+  });
+});
+
+test("a refused API call with no head to report on is left to the delivery log", async () => {
+  const pull = pullRequest();
+  const { api, state } = createFakeGitHub({
+    configSource: CONFIG,
+    pullRequests: new Map([[pull.number, pull]]),
+  });
+  const failing: GitHubApi = {
+    ...api,
+    getPullRequestState: async () => {
+      throw new GitHubApiError("Resource not accessible by integration", { status: 403 });
+    },
+  };
+  const { context } = createTestContext(failing);
+
+  await expect(evaluatePullRequest(context, failing, repo, pull.number)).rejects.toThrow(
+    "Resource not accessible by integration",
+  );
+  expect(state.checkRuns).toHaveLength(0);
+});
+
+test("a failure after the pull request was read lands on the head GitHub reported", async () => {
+  const pull = pullRequest({ base: "develop", head: "feature/login", headSha: "beefbeef" });
+  const { api, state } = createFakeGitHub({
+    configSource: CONFIG,
+    pullRequests: new Map([[pull.number, pull]]),
+  });
+  let attempts = 0;
+  const failing: GitHubApi = {
+    ...api,
+    upsertCheckRun: async (target, input) => {
+      attempts += 1;
+      if (attempts === 1) {
+        throw new Error("the network went away");
+      }
+      await api.upsertCheckRun(target, input);
+    },
+  };
+  const { context } = createTestContext(failing);
+
+  // A stale head from the delivery must not win over what GitHub answered.
+  await evaluatePullRequest(context, failing, repo, pull.number, { headSha: "stale" });
+
+  expect(state.checkRuns).toHaveLength(1);
+  expect(state.checkRuns[0]).toMatchObject({
+    headSha: "beefbeef",
+    conclusion: "failure",
+    title: "mergegate could not evaluate this pull request",
+  });
+});
+
+test("a branch that cannot be deleted does not undo a reported merge", async () => {
+  const pull = pullRequest({ labels: ["ready-to-merge"] });
+  const { api, state } = createFakeGitHub({
+    configSource: `${CONFIG}\nmerge:\n  deleteBranchOnMerge: true\n`,
+    pullRequests: new Map([[pull.number, pull]]),
+  });
+  const failing: GitHubApi = {
+    ...api,
+    deleteBranch: async () => {
+      throw new GitHubApiError("Resource not accessible by integration", { status: 403 });
+    },
+  };
+  const { context } = createTestContext(failing);
+
+  await evaluatePullRequest(context, failing, repo, pull.number);
+
+  expect(state.merges).toHaveLength(1);
+  expect(state.checkRuns.at(-1)).toMatchObject({
+    conclusion: "success",
+    title: "Merged by mergegate",
+  });
 });
