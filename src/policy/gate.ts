@@ -21,6 +21,7 @@ export type GateReason =
   | "conflict"
   | "waiting-checks"
   | "checks-unreadable"
+  | "checks-refused"
   | "waiting-review"
   | "changes-requested"
   | "behind-base";
@@ -42,6 +43,11 @@ export interface GateInput {
    * through, so `otherChecks` is not the whole story.
    */
   readonly checksTruncated: boolean;
+  /**
+   * `true` when GitHub refused one of the checks rather than reporting it, so
+   * mergegate does not know how it ended.
+   */
+  readonly checksRefused: boolean;
 }
 
 const PASSING: ReadonlySet<CheckConclusion> = new Set(["success", "neutral", "skipped"]);
@@ -69,6 +75,9 @@ export function evaluateGate(input: GateInput, settings: MergeSettings): GateRes
   if (settings.requireChecks) {
     // An unread check is not a passing one: a rollup mergegate could not read
     // to the end blocks rather than merging on the part it did see.
+    if (input.checksRefused) {
+      return { ready: false, reason: "checks-refused" };
+    }
     if (input.checksTruncated) {
       return { ready: false, reason: "checks-unreadable" };
     }
