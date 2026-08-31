@@ -154,6 +154,12 @@ export class GitHubApiError extends Error {
   readonly method: string | null;
   /** The route, as Octokit names it: `GET /repos/{owner}/{repo}/pulls/{n}`. */
   readonly url: string | null;
+  /**
+   * For GraphQL, the field each error was raised on -- `FORBIDDEN at
+   * repository.pullRequest.commits.nodes.0.commit.statusCheckRollup`. A refusal
+   * names one field, and knowing which is the whole diagnosis.
+   */
+  readonly graphqlErrors: readonly string[];
 
   constructor(
     message: string,
@@ -161,6 +167,7 @@ export class GitHubApiError extends Error {
       readonly status?: number | null;
       readonly method?: string | null;
       readonly url?: string | null;
+      readonly graphqlErrors?: readonly string[];
     } = {},
   ) {
     super(message);
@@ -168,6 +175,7 @@ export class GitHubApiError extends Error {
     this.status = details.status ?? null;
     this.method = details.method ?? null;
     this.url = details.url ?? null;
+    this.graphqlErrors = details.graphqlErrors ?? [];
   }
 
   /** 401 and 403: the installation may not do this, and retrying changes nothing. */
@@ -177,6 +185,11 @@ export class GitHubApiError extends Error {
 
   /** What belongs on a log line next to the message. */
   fields(): Record<string, unknown> {
-    return { status: this.status, method: this.method, url: this.url };
+    return {
+      status: this.status,
+      method: this.method,
+      url: this.url,
+      ...(this.graphqlErrors.length === 0 ? {} : { graphqlErrors: this.graphqlErrors }),
+    };
   }
 }

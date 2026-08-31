@@ -39,8 +39,21 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** The `type` of every entry in a GraphQL error response, or nothing. */
-function graphqlErrorTypes(error: unknown): readonly string[] {
+interface GraphqlErrorEntry {
+  /** `FORBIDDEN`, `NOT_FOUND`, ... */
+  readonly type: string | null;
+  /** `repository.pullRequest.commits.nodes.0.commit.statusCheckRollup`. */
+  readonly path: string | null;
+}
+
+/**
+ * The entries of a GraphQL error response.
+ *
+ * The path is the whole point: GraphQL refuses one *field*, and which field it
+ * was is the difference between "the app is broken" and "the app is missing one
+ * permission". GitHub does not put it in the message, so it is read off here.
+ */
+function graphqlErrors(error: unknown): readonly GraphqlErrorEntry[] {
   if (typeof error !== "object" || error === null || !("errors" in error)) {
     return [];
   }
@@ -48,11 +61,20 @@ function graphqlErrorTypes(error: unknown): readonly string[] {
   if (!Array.isArray(errors)) {
     return [];
   }
-  return errors.flatMap((entry: unknown) =>
-    typeof entry === "object" && entry !== null && "type" in entry
-      ? [String((entry as { type: unknown }).type)]
-      : [],
-  );
+  return errors.flatMap((entry: unknown): GraphqlErrorEntry[] => {
+    if (typeof entry !== "object" || entry === null) {
+      return [];
+    }
+    const type = "type" in entry ? String((entry as { type: unknown }).type) : null;
+    const path = "path" in entry ? (entry as { path: unknown }).path : null;
+    return [{ type, path: Array.isArray(path) ? path.map(String).join(".") : null }];
+  });
+}
+
+/** `FORBIDDEN at repository.pullRequest...`, for the log and the check run. */
+function describe(entry: GraphqlErrorEntry): string {
+  const type = entry.type ?? "error";
+  return entry.path === null ? type : `${type} at ${entry.path}`;
 }
 
 /**
@@ -60,16 +82,23 @@ function graphqlErrorTypes(error: unknown): readonly string[] {
  * off the error entries rather than off the status line. Without this a missing
  * permission on the pull request query looks like an ordinary crash.
  */
-function toGraphqlError(error: unknown): GitHubApiError {
+export function toGraphqlError(error: unknown): GitHubApiError {
   if (error instanceof GitHubApiError) {
     return error;
   }
-  const forbidden = graphqlErrorTypes(error).includes("FORBIDDEN");
-  return new GitHubApiError(messageOf(error), {
-    status: forbidden ? 403 : statusOf(error),
-    method: "POST",
-    url: "/graphql",
-  });
+  const entries = graphqlErrors(error);
+  const forbidden = entries.some((entry) => entry.type === "FORBIDDEN");
+  const described = entries.map(describe);
+  return new GitHubApiError(
+    // The field GitHub refused, in the message, so it reaches the check run too.
+    described.length === 0 ? messageOf(error) : `${messageOf(error)} (${described.join("; ")})`,
+    {
+      status: forbidden ? 403 : statusOf(error),
+      method: "POST",
+      url: "/graphql",
+      graphqlErrors: described,
+    },
+  );
 }
 
 class OctokitGitHubApi implements GitHubApi {
