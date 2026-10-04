@@ -1,0 +1,25 @@
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  extends: [
+    "config:recommended",
+    // Commits land on main squashed, and release-please reads them: `fix(deps)`
+    // for runtime dependencies cuts a release, `chore(deps)` for the rest does not.
+    ":semanticCommits",
+    // Minor and patch updates arrive as one pull request; majors stay separate.
+    "group:allNonMajor",
+    // Keep actions pinned to a commit SHA, as the workflows already are.
+    "helpers:pinGitHubActionDigests",
+  ],
+  // Every dependency is pinned to an exact version.
+  rangeStrategy: "pin",
+  // Matches pnpm's own minimumReleaseAge, so the lockfile Renovate writes still
+  // installs with --frozen-lockfile.
+  minimumReleaseAge: "1 day",
+  packageRules: [
+    {
+      // Vite+ ships the CLI and the core it aliases as `vite` together.
+      groupName: "Vite+",
+      matchPackageNames: ["vite-plus", "@voidzero-dev/vite-plus-core", "voidzero-dev/setup-vp"],
+    },
+  ],
+}
