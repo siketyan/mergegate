@@ -19,26 +19,26 @@
     "schema": "node scripts/json-schema.ts"
   },
   "dependencies": {
-    "@octokit/auth-app": "8.3.0",
-    "@octokit/core": "7.0.7",
+    "@octokit/auth-app": "8.3.1",
+    "@octokit/core": "7.0.8",
     "@octokit/plugin-rest-endpoint-methods": "18.0.0",
     "@octokit/plugin-retry": "8.1.1",
     "@octokit/plugin-throttling": "11.0.5",
-    "valibot": "1.4.2",
-    "yaml": "2.9.0"
+    "valibot": "1.5.0",
+    "yaml": "2.9.1"
   },
   "devDependencies": {
-    "@graphql-codegen/cli": "7.3.1",
+    "@graphql-codegen/cli": "7.4.3",
     "@graphql-codegen/typescript": "6.1.0",
-    "@graphql-codegen/typescript-operations": "6.1.6",
+    "@graphql-codegen/typescript-operations": "6.1.9",
     "@octokit/graphql-schema": "15.26.1",
-    "@types/node": "26.3.0",
-    "@valibot/to-json-schema": "1.7.1",
+    "@types/node": "26.6.4",
+    "@valibot/to-json-schema": "1.8.0",
     "graphql": "16.14.2",
     "typescript": "7.0.2",
     "vite": "catalog:",
     "vite-plus": "catalog:",
-    "wrangler": "4.126.0"
+    "wrangler": "4.147.0"
   },
   "devEngines": {
     "packageManager": {
