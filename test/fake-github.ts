@@ -45,6 +45,7 @@ export function pullRequest(overrides: Partial<PullRequestState> = {}): PullRequ
     reviewDecision: "APPROVED",
     otherChecks: ["success"],
     checksTruncated: false,
+    checksRefused: false,
     ...overrides,
   };
 }

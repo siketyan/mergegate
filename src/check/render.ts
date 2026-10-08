@@ -133,6 +133,14 @@ const WAITING: Record<GateReason, Waiting> = {
       "Merge this pull request by hand, or reduce the number of checks on the commit.",
     recovery: "manual",
   },
+  "checks-refused": {
+    title: "Cannot read every check on this commit",
+    summary:
+      "GitHub refused one of the checks on this commit, so mergegate cannot tell whether it passed. " +
+      "A commit status needs the app's **Commit statuses: read** permission, which is separate from " +
+      "Checks. Grant it, or merge this pull request by hand.",
+    recovery: "manual",
+  },
   "waiting-review": {
     title: "Waiting for review approval",
     summary: "This pull request still needs an approving review.",

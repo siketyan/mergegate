@@ -556,12 +556,13 @@ nothing about the pull request changes behind your back.
 
 ### Repository permissions
 
-| Permission    | Level        | Used for                                            |
-| ------------- | ------------ | --------------------------------------------------- |
-| Metadata      | Read         | Mandatory. Also the permission behind `Merge now`   |
-| Checks        | Read & write | Creating and updating check runs                    |
-| Contents      | Read & write | Reading the config file, merging                    |
-| Pull requests | Read & write | Reading PRs, merging, dropping the label on failure |
+| Permission      | Level        | Used for                                            |
+| --------------- | ------------ | --------------------------------------------------- |
+| Metadata        | Read         | Mandatory. Also the permission behind `Merge now`   |
+| Checks          | Read & write | Creating and updating check runs                    |
+| Commit statuses | Read         | Reading commit statuses, and the `status` event     |
+| Contents        | Read & write | Reading the config file, merging                    |
+| Pull requests   | Read & write | Reading PRs, merging, dropping the label on failure |
 
 ### Webhook events
 

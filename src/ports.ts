@@ -60,6 +60,8 @@ export interface PullRequestState {
   readonly otherChecks: readonly GateCheckConclusion[];
   /** `true` when the check rollup was longer than mergegate read. */
   readonly checksTruncated: boolean;
+  /** `true` when GitHub refused a check in the rollup, so its result is unknown. */
+  readonly checksRefused: boolean;
 }
 
 export interface CheckRunInput {

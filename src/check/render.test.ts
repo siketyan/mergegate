@@ -244,3 +244,18 @@ test("any other failure fails the check without blaming permissions", () => {
   expect(output.summary).toContain("boom");
   expect(output.summary).not.toContain("permission");
 });
+
+test("a refused check names the permission it needs", () => {
+  const output = renderCheck({
+    kind: "waiting",
+    reason: "checks-refused",
+    label: "ready-to-merge",
+    strategy: "merge",
+    armed: true,
+    offerMerge: true,
+  });
+  expect(output.conclusion).toBe("action_required");
+  expect(output.summary).toContain("Commit statuses: read");
+  // Nothing a press could clear, so no button.
+  expect(output.actions).toEqual([]);
+});

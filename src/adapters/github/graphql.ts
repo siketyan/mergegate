@@ -191,8 +191,12 @@ export function rollupPage(response: PullRequestStateQuery): {
 export function toPullRequestState(
   response: PullRequestStateQuery,
   ownCheckName: string,
-  extraContexts: readonly (RollupContextFragment | null)[] = [],
-  checksTruncated = false,
+  rollup: {
+    /** Contexts read from the pages after the first. */
+    readonly contexts?: readonly (RollupContextFragment | null)[];
+    readonly truncated?: boolean;
+    readonly refused?: boolean;
+  } = {},
 ): PullRequestState | null {
   const repository = response.repository;
   const pullRequest = repository?.pullRequest;
@@ -202,7 +206,7 @@ export function toPullRequestState(
 
   const contexts = [
     ...(pullRequest.commits.nodes?.[0]?.commit.statusCheckRollup?.contexts.nodes ?? []),
-    ...extraContexts,
+    ...(rollup.contexts ?? []),
   ];
 
   return {
@@ -229,6 +233,7 @@ export function toPullRequestState(
     behindBase: pullRequest.mergeStateStatus === "BEHIND",
     reviewDecision: pullRequest.reviewDecision ?? null,
     otherChecks: otherChecks(contexts, ownCheckName),
-    checksTruncated,
+    checksTruncated: rollup.truncated ?? false,
+    checksRefused: rollup.refused ?? false,
   };
 }
