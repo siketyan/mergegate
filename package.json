@@ -28,9 +28,9 @@
     "yaml": "2.9.1"
   },
   "devDependencies": {
-    "@graphql-codegen/cli": "7.4.3",
-    "@graphql-codegen/typescript": "6.1.0",
-    "@graphql-codegen/typescript-operations": "6.1.9",
+    "@graphql-codegen/cli": "7.4.6",
+    "@graphql-codegen/typescript": "6.1.2",
+    "@graphql-codegen/typescript-operations": "6.1.10",
     "@octokit/graphql-schema": "15.26.1",
     "@types/node": "26.6.4",
     "@valibot/to-json-schema": "1.8.0",
@@ -38,12 +38,12 @@
     "typescript": "7.0.2",
     "vite": "catalog:",
     "vite-plus": "catalog:",
-    "wrangler": "4.147.0"
+    "wrangler": "4.149.0"
   },
   "devEngines": {
     "packageManager": {
       "name": "pnpm",
-      "version": "12.9.1",
+      "version": "12.11.1",
       "onFail": "download"
     },
     "runtime": {
