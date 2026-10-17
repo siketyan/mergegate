@@ -25,7 +25,7 @@ jobs:
       # Sets up the vp CLI, the Node version and the package manager in one
       # step, so no setup-node or pnpm setup is needed. Pinned to an exact
       # version: the moving v1 tag stopped being updated at v1.15.0.
-      - uses: voidzero-dev/setup-vp@3754dd7dbdb32bd8f6d28b6043de13ad3a75f21f # v1.21.1
+      - uses: voidzero-dev/setup-vp@68f39c78aaf39be468cabd2afb09c162574c84af # v1.21.2
         with:
           # No node-version: Vite+ resolves it from devEngines.runtime.
           cache: true
