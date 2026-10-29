@@ -152,12 +152,13 @@ class OctokitGitHubApi implements GitHubApi {
     });
     // A check beyond the first page of the rollup still gates the merge, so the
     // rest of it is read rather than assumed to be empty.
-    const rest = await this.#restOfRollup(repo, response);
+    const rest = await this.#restOfRollup(repo, pullNumber, response);
     return toPullRequestState(response, options.ownCheckName, rest.contexts, rest.truncated);
   }
 
   async #restOfRollup(
     repo: RepoRef,
+    pullNumber: number,
     response: PullRequestStateQuery,
   ): Promise<{
     readonly contexts: readonly (RollupContextFragment | null)[];
@@ -182,6 +183,7 @@ class OctokitGitHubApi implements GitHubApi {
         await this.#graphql<PullRequestCheckContextsQuery>(checkContextsQuery, {
           owner: repo.owner,
           repo: repo.repo,
+          number: pullNumber,
           oid: first.oid,
           after,
         });

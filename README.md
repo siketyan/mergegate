@@ -106,7 +106,7 @@ Two ideas carry the whole design.
    merge it from the GitHub UI.
 2. **The assisted merge is done by the app.** The app sits in the ruleset's bypass list, so it can merge past
    the check it failed itself. In exchange the app verifies the things the ruleset would have verified:
-   every other check is green, the review is approved, and the branch is not in conflict.
+   every other required check is green, the review is approved, and the branch is not in conflict.
 
 ### Timeline of a promotion PR
 
@@ -394,7 +394,7 @@ merge:
   label: ready-to-merge # Label that triggers an assisted merge
   manual: [squash] # Strategies a human may merge from the UI. Keep in sync with Allowed merge methods
   requireApproval: true # The review must be approved (or not required)
-  requireChecks: true # Every check other than mergegate must have succeeded
+  requireChecks: true # Every required check other than mergegate must have succeeded
   requireUpToDate: false # The head must be up to date with the base
   allowForkHead: false # Whether PRs from forks may match non-squash rules
   allowCheckAction: true # Offer a "Merge now" button on the check run
@@ -515,8 +515,11 @@ Even with the `ready-to-merge` label present, the app merges only once all of th
   labelled PR often has no answer yet; mergegate waits a few seconds rather than leaving it blocked until
   some other event wakes it. If it still has not settled, the check says so and the label can be re-added —
   or **Merge now** pressed again
-- With `merge.requireChecks: true`, every check run and commit status other than `mergegate` is success,
-  neutral or skipped
+- With `merge.requireChecks: true`, every **required** check run and commit status other than `mergegate`
+  is success, neutral or skipped. "Required" is what the branch protection and rulesets say for this PR, as
+  GitHub reports it — a check that is not required does not block GitHub's merge button, so it does not
+  block mergegate either, whatever its state. A required check that has not reported on the commit at all
+  is not seen yet, so it does not block either
 - With `merge.requireApproval: true`, `reviewDecision` is `APPROVED` or reviews are not required (`null`).
   `CHANGES_REQUESTED` is always refused
 - With `merge.requireUpToDate: true`, the head is up to date with the base

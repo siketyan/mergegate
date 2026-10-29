@@ -1,10 +1,13 @@
-import type { CheckConclusion } from "../../policy/gate.ts";
+import type { CheckConclusion, OtherCheck } from "../../policy/gate.ts";
 import type { PullRequestState } from "../../ports.ts";
 import type { PullRequestStateQuery, RollupContextFragment } from "./generated/graphql.ts";
 
 /**
  * The rollup selects the same fields wherever it is read, so both queries take
  * them from here and codegen types them once.
+ *
+ * `isRequired` is asked for the pull request being evaluated, so every query
+ * that spreads the fragment declares `$number`.
  *
  * The `/* GraphQL *\/` marker is what graphql-codegen picks these literals up by.
  */
@@ -15,9 +18,11 @@ const rollupContextFragment = /* GraphQL */ `
       name
       status
       conclusion
+      isRequired(pullRequestNumber: $number)
     }
     ... on StatusContext {
       state
+      isRequired(pullRequestNumber: $number)
     }
   }
 `;
@@ -80,6 +85,7 @@ const checkContextsOperation = /* GraphQL */ `
   query PullRequestCheckContexts(
     $owner: String!
     $repo: String!
+    $number: Int!
     $oid: GitObjectID!
     $after: String!
   ) {
@@ -150,8 +156,8 @@ function statusContextConclusion(state: string): CheckConclusion {
 function otherChecks(
   nodes: readonly (RollupContextFragment | null)[],
   ownCheckName: string,
-): CheckConclusion[] {
-  const conclusions: CheckConclusion[] = [];
+): OtherCheck[] {
+  const checks: OtherCheck[] = [];
   for (const node of nodes) {
     if (node === null) {
       continue;
@@ -160,17 +166,20 @@ function otherChecks(
       case "CheckRun":
         // Never gate on our own check run: it is failing on purpose.
         if (node.name !== ownCheckName) {
-          conclusions.push(checkRunConclusion(node.status, node.conclusion));
+          checks.push({
+            conclusion: checkRunConclusion(node.status, node.conclusion),
+            required: node.isRequired,
+          });
         }
         break;
       case "StatusContext":
-        conclusions.push(statusContextConclusion(node.state));
+        checks.push({ conclusion: statusContextConclusion(node.state), required: node.isRequired });
         break;
       default:
         break;
     }
   }
-  return conclusions;
+  return checks;
 }
 
 /** The head commit and the first page of its check rollup. */

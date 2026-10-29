@@ -4,7 +4,7 @@
  */
 
 import type { Strategy } from "./config/schema.ts";
-import type { CheckConclusion as GateCheckConclusion, ReviewDecision } from "./policy/gate.ts";
+import type { OtherCheck, ReviewDecision } from "./policy/gate.ts";
 import type { CheckAction, CheckConclusion } from "./check/render.ts";
 
 export interface RepoRef {
@@ -57,7 +57,7 @@ export interface PullRequestState {
   readonly behindBase: boolean;
   readonly reviewDecision: ReviewDecision;
   /** Every check on the head commit except the one mergegate owns. */
-  readonly otherChecks: readonly GateCheckConclusion[];
+  readonly otherChecks: readonly OtherCheck[];
   /** `true` when the check rollup was longer than mergegate read. */
   readonly checksTruncated: boolean;
 }

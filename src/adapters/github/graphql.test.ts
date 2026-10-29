@@ -50,8 +50,12 @@ function response(options: {
   };
 }
 
-function checkRun(name: string, conclusion: CheckConclusionState): RollupContextFragment {
-  return { __typename: "CheckRun", name, status: "COMPLETED", conclusion };
+function checkRun(
+  name: string,
+  conclusion: CheckConclusionState,
+  isRequired = true,
+): RollupContextFragment {
+  return { __typename: "CheckRun", name, status: "COMPLETED", conclusion, isRequired };
 }
 
 test("a full rollup needs no second page", () => {
@@ -73,7 +77,10 @@ test("checks beyond the first page still gate the merge", () => {
     [checkRun("e2e", "FAILURE")],
   );
 
-  expect(state?.otherChecks).toEqual(["success", "failure"]);
+  expect(state?.otherChecks).toEqual([
+    { conclusion: "success", required: true },
+    { conclusion: "failure", required: true },
+  ]);
 });
 
 test("our own check is dropped wherever in the rollup it lands", () => {
@@ -83,7 +90,24 @@ test("our own check is dropped wherever in the rollup it lands", () => {
     [checkRun("mergegate", "ACTION_REQUIRED"), checkRun("lint", "SUCCESS")],
   );
 
-  expect(state?.otherChecks).toEqual(["success"]);
+  expect(state?.otherChecks).toEqual([{ conclusion: "success", required: true }]);
+});
+
+test("whether a check is required is carried for check runs and statuses alike", () => {
+  const state = toPullRequestState(
+    response({
+      contexts: [
+        checkRun("lint", "FAILURE", false),
+        { __typename: "StatusContext", state: "SUCCESS", isRequired: true },
+      ],
+    }),
+    "mergegate",
+  );
+
+  expect(state?.otherChecks).toEqual([
+    { conclusion: "failure", required: false },
+    { conclusion: "success", required: true },
+  ]);
 });
 
 test("an unread page of the rollup is carried into the state", () => {

@@ -88,7 +88,10 @@ test("a labelled pull request is merged with the evaluated head SHA", async () =
 });
 
 test("the label alone is not enough", async () => {
-  const state = await run({}, { labels: ["ready-to-merge"], otherChecks: ["failure"] });
+  const state = await run(
+    {},
+    { labels: ["ready-to-merge"], otherChecks: [{ conclusion: "failure", required: true }] },
+  );
   expect(state.merges).toHaveLength(0);
   expect(state.checkRuns[0]).toMatchObject({
     conclusion: "action_required",
@@ -267,7 +270,11 @@ test("a press of the button merges without the label", async () => {
 });
 
 test("a press that cannot merge yet says so and keeps the button", async () => {
-  const state = await run({}, { otherChecks: ["pending"] }, PRESSED);
+  const state = await run(
+    {},
+    { otherChecks: [{ conclusion: "pending", required: true }] },
+    PRESSED,
+  );
   expect(state.merges).toHaveLength(0);
   const check = state.checkRuns.at(-1);
   expect(check).toMatchObject({
@@ -281,7 +288,10 @@ test("a press that cannot merge yet says so and keeps the button", async () => {
 });
 
 test("a labelled pull request that is not ready is the one mergegate comes back to", async () => {
-  const state = await run({}, { labels: ["ready-to-merge"], otherChecks: ["pending"] });
+  const state = await run(
+    {},
+    { labels: ["ready-to-merge"], otherChecks: [{ conclusion: "pending", required: true }] },
+  );
   const check = state.checkRuns.at(-1);
   expect(check?.summary).toContain("mergegate merges as soon as that clears");
   // Nothing to press: the label already is the standing instruction.
