@@ -123,7 +123,7 @@ const WAITING: Record<GateReason, Waiting> = {
   },
   "waiting-checks": {
     title: "Waiting for other checks",
-    summary: "Every other check on this commit has to succeed first.",
+    summary: "Every required check on this commit has to succeed first.",
     recovery: "resumes",
   },
   "checks-unreadable": {

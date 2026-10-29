@@ -43,7 +43,7 @@ export function pullRequest(overrides: Partial<PullRequestState> = {}): PullRequ
     mergeable: true,
     behindBase: false,
     reviewDecision: "APPROVED",
-    otherChecks: ["success"],
+    otherChecks: [{ conclusion: "success", required: true }],
     checksTruncated: false,
     ...overrides,
   };

@@ -1,9 +1,13 @@
 import { expect, test } from "vite-plus/test";
 import { defaultConfig } from "../config/parse.ts";
 import type { MergeSettings } from "../config/schema.ts";
-import { evaluateGate, type GateInput } from "./gate.ts";
+import { type CheckConclusion, evaluateGate, type GateInput, type OtherCheck } from "./gate.ts";
 
 const settings: MergeSettings = defaultConfig().merge;
+
+function required(...conclusions: CheckConclusion[]): OtherCheck[] {
+  return conclusions.map((conclusion) => ({ conclusion, required: true }));
+}
 
 function input(overrides: Partial<GateInput> = {}): GateInput {
   return {
@@ -11,7 +15,7 @@ function input(overrides: Partial<GateInput> = {}): GateInput {
     mergeable: true,
     behindBase: false,
     reviewDecision: "APPROVED",
-    otherChecks: ["success"],
+    otherChecks: required("success"),
     checksTruncated: false,
     ...overrides,
   };
@@ -69,20 +73,41 @@ test("a repository without review rules reports no decision at all", () => {
 });
 
 test("pending and failing checks both block", () => {
-  expect(evaluateGate(input({ otherChecks: ["success", "pending"] }), settings)).toEqual({
+  expect(evaluateGate(input({ otherChecks: required("success", "pending") }), settings)).toEqual({
     ready: false,
     reason: "waiting-checks",
   });
-  expect(evaluateGate(input({ otherChecks: ["failure"] }), settings)).toEqual({
+  expect(evaluateGate(input({ otherChecks: required("failure") }), settings)).toEqual({
     ready: false,
     reason: "waiting-checks",
   });
 });
 
 test("neutral and skipped checks count as passing", () => {
-  expect(evaluateGate(input({ otherChecks: ["neutral", "skipped"] }), settings)).toEqual({
+  expect(evaluateGate(input({ otherChecks: required("neutral", "skipped") }), settings)).toEqual({
     ready: true,
   });
+});
+
+test("a check that is not required does not block, whatever its state", () => {
+  const optional: OtherCheck[] = [
+    { conclusion: "failure", required: false },
+    { conclusion: "pending", required: false },
+  ];
+  expect(
+    evaluateGate(input({ otherChecks: [...required("success"), ...optional] }), settings),
+  ).toEqual({ ready: true });
+});
+
+test("a failing required check blocks next to passing optional ones", () => {
+  expect(
+    evaluateGate(
+      input({
+        otherChecks: [{ conclusion: "success", required: false }, ...required("failure")],
+      }),
+      settings,
+    ),
+  ).toEqual({ ready: false, reason: "waiting-checks" });
 });
 
 test("being behind the base only blocks when it is required", () => {
