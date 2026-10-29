@@ -19,7 +19,11 @@ export const pullRequestEventSchema = v.object({
   action: v.string(),
   installation,
   repository,
-  pull_request: v.object({ number: v.number() }),
+  /** The head is what the failing check run goes on when evaluation cannot get far enough to read it. */
+  pull_request: v.object({
+    number: v.number(),
+    head: v.optional(v.object({ sha: v.string() })),
+  }),
 });
 
 export const checkSuiteEventSchema = v.object({

@@ -4,7 +4,14 @@ import { type Config, FALLBACK_CHECK_NAME, type Strategy } from "../config/schem
 import { decide, directions } from "../policy/decide.ts";
 import { isLiteral, matchesPattern } from "../policy/glob.ts";
 import { evaluateGate } from "../policy/gate.ts";
-import type { AppContext, GitHubApi, MergeOutcome, PullRequestState, RepoRef } from "../ports.ts";
+import {
+  type AppContext,
+  type GitHubApi,
+  GitHubApiError,
+  type MergeOutcome,
+  type PullRequestState,
+  type RepoRef,
+} from "../ports.ts";
 import { loadConfig } from "./config.ts";
 
 const TRANSIENT: ReadonlySet<string> = new Set(["head-changed", "not-ready"]);
@@ -17,6 +24,10 @@ const TRANSIENT: ReadonlySet<string> = new Set(["head-changed", "not-ready"]);
  * Bounded, because "do not wait forever" is the other half of that rule.
  */
 const MERGEABILITY_BACKOFF_MS = [2000, 4000, 8000] as const;
+
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
 function renderTemplate(template: string, values: Record<string, string>): string {
   return template.replaceAll(/\{(\w+)\}/g, (match, name: string) => values[name] ?? match);
@@ -87,7 +98,17 @@ async function runAssistedMerge(
     context.logger.info("merged", { pull: pullRequest.number, strategy, sha: outcome.sha });
     await report(api, repo, checkName, pullRequest.headSha, { kind: "merged", strategy });
     if (config.merge.deleteBranchOnMerge && !pullRequest.isFork) {
-      await api.deleteBranch(repo, pullRequest.head);
+      try {
+        await api.deleteBranch(repo, pullRequest.head);
+      } catch (error) {
+        // The pull request is merged either way. Tidying up afterwards is not
+        // worth turning a reported merge into a reported failure.
+        context.logger.warn("could not delete the branch", {
+          pull: pullRequest.number,
+          branch: pullRequest.head,
+          reason: messageOf(error),
+        });
+      }
     }
     return;
   }
@@ -170,6 +191,12 @@ export interface MergeRequest {
 
 export interface EvaluateOptions {
   readonly mergeRequest?: MergeRequest;
+  /**
+   * The head the delivery was about. Only used when evaluation fails before it
+   * could read the pull request: without it there is no commit to write the
+   * failing check run on, and the pull request would be left with nothing.
+   */
+  readonly headSha?: string;
 }
 
 /**
@@ -253,6 +280,11 @@ async function settleMergeability(
 /**
  * Decide what a pull request is allowed to do, say so in the check run, and
  * merge it when it is an assisted merge that has cleared every gate.
+ *
+ * Invariant: fail closed. An error on the way to a decision -- a permission
+ * GitHub refuses, an endpoint that is down -- is written into the check run as
+ * a failure, because a pull request left with no check run at all is a pull
+ * request nothing is gating.
  */
 export async function evaluatePullRequest(
   context: AppContext,
@@ -261,16 +293,58 @@ export async function evaluatePullRequest(
   pullNumber: number,
   options: EvaluateOptions = {},
 ): Promise<void> {
-  const result = await loadConfig(context, api, repo);
-
   // With a broken configuration the configured check name is unknown, so fail
   // closed under the default name -- the one a ruleset is normally pointed at.
+  let checkName = FALLBACK_CHECK_NAME;
+  // The event's head until GitHub has been asked, then what GitHub answered.
+  let headSha = options.headSha;
+
+  try {
+    await evaluate(context, api, repo, pullNumber, options, (name, sha) => {
+      checkName = name;
+      headSha = sha ?? headSha;
+    });
+  } catch (error) {
+    const failure = error instanceof GitHubApiError ? error : null;
+    context.logger.error("evaluation failed", {
+      pull: pullNumber,
+      reason: messageOf(error),
+      ...(failure === null ? {} : failure.fields()),
+    });
+    if (headSha === undefined) {
+      // No commit to write a check run on, so the log line is all there is.
+      throw error;
+    }
+    await report(api, repo, checkName, headSha, {
+      kind: "error",
+      message: messageOf(error),
+      forbidden: failure?.forbidden ?? false,
+    });
+  }
+}
+
+/**
+ * `learnt` hands the caller the check run name and the head as soon as they are
+ * known, so a failure after that point still lands on the right check run.
+ */
+async function evaluate(
+  context: AppContext,
+  api: GitHubApi,
+  repo: RepoRef,
+  pullNumber: number,
+  options: EvaluateOptions,
+  learnt: (checkName: string, headSha: string | undefined) => void,
+): Promise<void> {
+  const result = await loadConfig(context, api, repo);
+
   const checkName = result.ok ? result.config.check.name : FALLBACK_CHECK_NAME;
+  learnt(checkName, undefined);
 
   const pullRequest = await api.getPullRequestState(repo, pullNumber, { ownCheckName: checkName });
   if (pullRequest === null || pullRequest.state !== "open") {
     return;
   }
+  learnt(checkName, pullRequest.headSha);
 
   if (!result.ok) {
     await report(api, repo, checkName, pullRequest.headSha, {

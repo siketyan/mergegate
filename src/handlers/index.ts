@@ -51,7 +51,7 @@ async function evaluateSha(
   // `pull_requests` is empty for pull requests from forks, hence the fallback.
   const numbers = known.length > 0 ? known : await api.findPullRequestsForSha(repo, sha);
   for (const number of numbers) {
-    await evaluatePullRequest(context, api, repo, number, options);
+    await evaluatePullRequest(context, api, repo, number, { ...options, headSha: sha });
   }
 }
 
@@ -74,6 +74,7 @@ export async function handleDelivery(
         api,
         toRepo(parsed.output.repository),
         parsed.output.pull_request.number,
+        { headSha: parsed.output.pull_request.head?.sha },
       );
       return;
     }
@@ -151,8 +152,12 @@ export async function handleDelivery(
               pulls: numbers,
             });
           }
-          const request: EvaluateOptions =
-            numbers.length === 1 ? { mergeRequest: { headSha: checkRun.head_sha, actor } } : {};
+          const request: EvaluateOptions = {
+            headSha: checkRun.head_sha,
+            ...(numbers.length === 1
+              ? { mergeRequest: { headSha: checkRun.head_sha, actor } }
+              : {}),
+          };
           for (const number of numbers) {
             await evaluatePullRequest(context, api, repo, number, request);
           }

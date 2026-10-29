@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   check:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
 
     steps:
@@ -25,7 +25,7 @@ jobs:
       # Sets up the vp CLI, the Node version and the package manager in one
       # step, so no setup-node or pnpm setup is needed. Pinned to an exact
       # version: the moving v1 tag stopped being updated at v1.15.0.
-      - uses: voidzero-dev/setup-vp@0cffb0a1ac50daa1541b57d1eb7c843f479522e1 # v1.18.0
+      - uses: voidzero-dev/setup-vp@cab1ab9eaff52d4857875f4f2c016e36af8f2c76 # v1.22.0
         with:
           # No node-version: Vite+ resolves it from devEngines.runtime.
           cache: true

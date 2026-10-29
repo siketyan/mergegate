@@ -1,4 +1,4 @@
-import type { AppContext } from "./ports.ts";
+import { type AppContext, GitHubApiError } from "./ports.ts";
 import { handleDelivery } from "./handlers/index.ts";
 
 const encoder = new TextEncoder();
@@ -94,6 +94,9 @@ export function createWebhookHandler(context: AppContext): (request: Request) =>
       } catch (error) {
         logger.error("delivery failed", {
           reason: error instanceof Error ? error.message : String(error),
+          // Which call GitHub refused. "Resource not accessible by integration"
+          // is not a diagnosis on its own.
+          ...(error instanceof GitHubApiError ? error.fields() : {}),
         });
       }
     });

@@ -97,9 +97,9 @@ export type StatusState =
   /** Status is successful. */
   | 'SUCCESS';
 
-type RollupContext_CheckRun_Fragment = { __typename: 'CheckRun', name: string, status: CheckStatusState, conclusion: CheckConclusionState | null };
+type RollupContext_CheckRun_Fragment = { __typename: 'CheckRun', name: string, status: CheckStatusState, conclusion: CheckConclusionState | null, isRequired: boolean };
 
-type RollupContext_StatusContext_Fragment = { __typename: 'StatusContext', state: StatusState };
+type RollupContext_StatusContext_Fragment = { __typename: 'StatusContext', state: StatusState, isRequired: boolean };
 
 export type RollupContextFragment =
   | RollupContext_CheckRun_Fragment
@@ -114,13 +114,14 @@ export type PullRequestStateQueryVariables = Exact<{
 
 
 export type PullRequestStateQuery = { repository: { nameWithOwner: string, pullRequest: { number: number, title: string, state: PullRequestState, isDraft: boolean, mergeable: MergeableState, mergeStateStatus: MergeStateStatus, reviewDecision: PullRequestReviewDecision | null, baseRefName: string, headRefName: string, headRefOid: string, headRepository: { nameWithOwner: string } | null, labels: { nodes: Array<{ name: string } | null> | null } | null, commits: { nodes: Array<{ commit: { oid: string, statusCheckRollup: { contexts: { pageInfo: { hasNextPage: boolean, endCursor: string | null }, nodes: Array<
-                  | { __typename: 'CheckRun', name: string, status: CheckStatusState, conclusion: CheckConclusionState | null }
-                  | { __typename: 'StatusContext', state: StatusState }
+                  | { __typename: 'CheckRun', name: string, status: CheckStatusState, conclusion: CheckConclusionState | null, isRequired: boolean }
+                  | { __typename: 'StatusContext', state: StatusState, isRequired: boolean }
                  | null> | null } } | null } } | null> | null } } | null } | null };
 
 export type PullRequestCheckContextsQueryVariables = Exact<{
   owner: string;
   repo: string;
+  number: number;
   oid: string;
   after: string;
 }>;
@@ -128,8 +129,8 @@ export type PullRequestCheckContextsQueryVariables = Exact<{
 
 export type PullRequestCheckContextsQuery = { repository: { object:
       | { statusCheckRollup: { contexts: { pageInfo: { hasNextPage: boolean, endCursor: string | null }, nodes: Array<
-              | { __typename: 'CheckRun', name: string, status: CheckStatusState, conclusion: CheckConclusionState | null }
-              | { __typename: 'StatusContext', state: StatusState }
+              | { __typename: 'CheckRun', name: string, status: CheckStatusState, conclusion: CheckConclusionState | null, isRequired: boolean }
+              | { __typename: 'StatusContext', state: StatusState, isRequired: boolean }
              | null> | null } } | null }
       | Record<PropertyKey, never>
      | null } | null };

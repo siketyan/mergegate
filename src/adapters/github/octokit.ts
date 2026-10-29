@@ -3,16 +3,17 @@ import { Octokit } from "@octokit/core";
 import { restEndpointMethods } from "@octokit/plugin-rest-endpoint-methods";
 import { retry } from "@octokit/plugin-retry";
 import { throttling } from "@octokit/plugin-throttling";
-import type {
-  CheckRunInput,
-  Env,
-  GitHubApi,
-  GitHubApiFactory,
-  Logger,
-  MergeInput,
-  MergeOutcome,
-  PullRequestState,
-  RepoRef,
+import {
+  type CheckRunInput,
+  type Env,
+  type GitHubApi,
+  GitHubApiError,
+  type GitHubApiFactory,
+  type Logger,
+  type MergeInput,
+  type MergeOutcome,
+  type PullRequestState,
+  type RepoRef,
 } from "../../ports.ts";
 import { decodeContent } from "./content.ts";
 import type {
@@ -38,6 +39,68 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+interface GraphqlErrorEntry {
+  /** `FORBIDDEN`, `NOT_FOUND`, ... */
+  readonly type: string | null;
+  /** `repository.pullRequest.commits.nodes.0.commit.statusCheckRollup`. */
+  readonly path: string | null;
+}
+
+/**
+ * The entries of a GraphQL error response.
+ *
+ * The path is the whole point: GraphQL refuses one *field*, and which field it
+ * was is the difference between "the app is broken" and "the app is missing one
+ * permission". GitHub does not put it in the message, so it is read off here.
+ */
+function graphqlErrors(error: unknown): readonly GraphqlErrorEntry[] {
+  if (typeof error !== "object" || error === null || !("errors" in error)) {
+    return [];
+  }
+  const errors = (error as { errors: unknown }).errors;
+  if (!Array.isArray(errors)) {
+    return [];
+  }
+  return errors.flatMap((entry: unknown): GraphqlErrorEntry[] => {
+    if (typeof entry !== "object" || entry === null) {
+      return [];
+    }
+    const type = "type" in entry ? String((entry as { type: unknown }).type) : null;
+    const path = "path" in entry ? (entry as { path: unknown }).path : null;
+    return [{ type, path: Array.isArray(path) ? path.map(String).join(".") : null }];
+  });
+}
+
+/** `FORBIDDEN at repository.pullRequest...`, for the log and the check run. */
+function describe(entry: GraphqlErrorEntry): string {
+  const type = entry.type ?? "error";
+  return entry.path === null ? type : `${type} at ${entry.path}`;
+}
+
+/**
+ * GraphQL answers 200 even when it refuses a field, so a refusal has to be read
+ * off the error entries rather than off the status line. Without this a missing
+ * permission on the pull request query looks like an ordinary crash.
+ */
+export function toGraphqlError(error: unknown): GitHubApiError {
+  if (error instanceof GitHubApiError) {
+    return error;
+  }
+  const entries = graphqlErrors(error);
+  const forbidden = entries.some((entry) => entry.type === "FORBIDDEN");
+  const described = entries.map(describe);
+  return new GitHubApiError(
+    // The field GitHub refused, in the message, so it reaches the check run too.
+    described.length === 0 ? messageOf(error) : `${messageOf(error)} (${described.join("; ")})`,
+    {
+      status: forbidden ? 403 : statusOf(error),
+      method: "POST",
+      url: "/graphql",
+      graphqlErrors: described,
+    },
+  );
+}
+
 class OctokitGitHubApi implements GitHubApi {
   readonly #octokit: AppOctokitInstance;
   readonly #appId: number;
@@ -45,6 +108,15 @@ class OctokitGitHubApi implements GitHubApi {
   constructor(octokit: AppOctokitInstance, appId: number) {
     this.#octokit = octokit;
     this.#appId = appId;
+  }
+
+  /** Every GraphQL call, so a refused field reads like a refused request. */
+  async #graphql<T>(query: string, variables: Record<string, unknown>): Promise<T> {
+    try {
+      return await this.#octokit.graphql<T>(query, variables);
+    } catch (error) {
+      throw toGraphqlError(error);
+    }
   }
 
   async readDefaultBranchFile(repo: RepoRef, path: string): Promise<string | null> {
@@ -71,7 +143,7 @@ class OctokitGitHubApi implements GitHubApi {
     pullNumber: number,
     options: { readonly ownCheckName: string },
   ): Promise<PullRequestState | null> {
-    const response = await this.#octokit.graphql<PullRequestStateQuery>(pullRequestQuery, {
+    const response = await this.#graphql<PullRequestStateQuery>(pullRequestQuery, {
       owner: repo.owner,
       repo: repo.repo,
       number: pullNumber,
@@ -80,12 +152,13 @@ class OctokitGitHubApi implements GitHubApi {
     });
     // A check beyond the first page of the rollup still gates the merge, so the
     // rest of it is read rather than assumed to be empty.
-    const rest = await this.#restOfRollup(repo, response);
+    const rest = await this.#restOfRollup(repo, pullNumber, response);
     return toPullRequestState(response, options.ownCheckName, rest.contexts, rest.truncated);
   }
 
   async #restOfRollup(
     repo: RepoRef,
+    pullNumber: number,
     response: PullRequestStateQuery,
   ): Promise<{
     readonly contexts: readonly (RollupContextFragment | null)[];
@@ -107,9 +180,10 @@ class OctokitGitHubApi implements GitHubApi {
     // a repository problem, not something to page through forever.
     for (let page = 0; page < 10 && after !== null; page += 1) {
       const next: PullRequestCheckContextsQuery =
-        await this.#octokit.graphql<PullRequestCheckContextsQuery>(checkContextsQuery, {
+        await this.#graphql<PullRequestCheckContextsQuery>(checkContextsQuery, {
           owner: repo.owner,
           repo: repo.repo,
+          number: pullNumber,
           oid: first.oid,
           after,
         });
@@ -327,6 +401,23 @@ export function createGitHubApiFactory(env: Env, logger: Logger): GitHubApiFacto
           },
         },
       });
+
+      // Outermost of the plugins' own hooks, so this sees the failure that
+      // survived the retries -- with the route that produced it attached.
+      octokit.hook.wrap("request", async (request, options) => {
+        try {
+          return await request(options);
+        } catch (error) {
+          throw error instanceof GitHubApiError
+            ? error
+            : new GitHubApiError(messageOf(error), {
+                status: statusOf(error),
+                method: options.method,
+                url: options.url,
+              });
+        }
+      });
+
       return new OctokitGitHubApi(octokit, appId);
     },
   };
