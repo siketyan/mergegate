@@ -26,6 +26,19 @@ const PULL_REQUEST_ACTIONS: ReadonlySet<string> = new Set([
 
 const REVIEW_ACTIONS: ReadonlySet<string> = new Set(["submitted", "dismissed", "edited"]);
 
+/**
+ * GitHub matches `pull_requests` on the head branch too, so a check on an older
+ * commit of that branch lists pull requests the commit no longer heads.
+ */
+function headedBy(
+  pulls: readonly { readonly number: number; readonly head?: { readonly sha: string } }[],
+  sha: string,
+): number[] {
+  return pulls
+    .filter((pull) => pull.head === undefined || pull.head.sha === sha)
+    .map((pull) => pull.number);
+}
+
 function toRepo(repository: RepositoryPayload): RepoRef {
   return { owner: repository.owner.login, repo: repository.name };
 }
@@ -100,7 +113,7 @@ export async function handleDelivery(
         api,
         toRepo(parsed.output.repository),
         suite.head_sha,
-        suite.pull_requests.map((pull) => pull.number),
+        headedBy(suite.pull_requests, suite.head_sha),
       );
       return;
     }
@@ -113,7 +126,7 @@ export async function handleDelivery(
       const { action, check_run: checkRun, repository, sender } = parsed.output;
       const own = isOwnApp(context, checkRun.app.id);
       const repo = toRepo(repository);
-      const known = checkRun.pull_requests.map((pull) => pull.number);
+      const known = headedBy(checkRun.pull_requests, checkRun.head_sha);
 
       switch (action) {
         // Someone else's check finishing can change whether an assisted merge is

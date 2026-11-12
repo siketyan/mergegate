@@ -193,6 +193,9 @@ importers:
       '@octokit/plugin-throttling':
         specifier: 11.0.5
         version: 11.0.5(@octokit/core@7.0.8)
+      bottleneck:
+        specifier: 2.19.5
+        version: 2.19.5
       valibot:
         specifier: 1.5.0
         version: 1.5.0(typescript@7.0.2)

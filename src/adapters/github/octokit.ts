@@ -3,6 +3,7 @@ import { Octokit } from "@octokit/core";
 import { restEndpointMethods } from "@octokit/plugin-rest-endpoint-methods";
 import { retry } from "@octokit/plugin-retry";
 import { throttling } from "@octokit/plugin-throttling";
+import Bottleneck from "bottleneck/light.js";
 import {
   type CheckRunInput,
   type Env,
@@ -283,7 +284,11 @@ class OctokitGitHubApi implements GitHubApi {
       repo: repo.repo,
       commit_sha: sha,
     });
-    return data.map((pull) => pull.number);
+    // "Associated" includes merged pull requests and ones that merely contain the
+    // commit; only an open one headed by it is what the check is about.
+    return data
+      .filter((pull) => pull.state === "open" && pull.head.sha === sha)
+      .map((pull) => pull.number);
   }
 
   async mergePullRequest(
@@ -381,6 +386,17 @@ function toMergeFailure(error: unknown): MergeOutcome {
 
 export function createGitHubApiFactory(env: Env, logger: Logger): GitHubApiFactory {
   const appId = Number(env.appId);
+  // The throttling plugin otherwise shares module-level limiters across every
+  // request in the isolate; a queued call then waits on another request's timer,
+  // which Workers cancels when that request ends, and the delivery hangs.
+  // The settings mirror the plugin's own defaults.
+  const groups = {
+    global: new Bottleneck.Group({ maxConcurrent: 10 }),
+    auth: new Bottleneck.Group({ maxConcurrent: 1 }),
+    search: new Bottleneck.Group({ maxConcurrent: 1, minTime: 2000 }),
+    write: new Bottleneck.Group({ maxConcurrent: 1, minTime: 1000 }),
+    notifications: new Bottleneck.Group({ maxConcurrent: 1, minTime: 3000 }),
+  };
 
   return {
     forInstallation(installationId: number): GitHubApi {
@@ -388,6 +404,7 @@ export function createGitHubApiFactory(env: Env, logger: Logger): GitHubApiFacto
         authStrategy: createAppAuth,
         auth: { appId: env.appId, privateKey: env.privateKey, installationId },
         throttle: {
+          ...groups,
           onRateLimit: (retryAfter: number, options: { method: string; url: string }): boolean => {
             logger.warn("rate limited", { retryAfter, url: options.url, method: options.method });
             return true;

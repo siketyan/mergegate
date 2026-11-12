@@ -24,6 +24,7 @@
     "@octokit/plugin-rest-endpoint-methods": "18.0.0",
     "@octokit/plugin-retry": "8.1.1",
     "@octokit/plugin-throttling": "11.0.5",
+    "bottleneck": "2.19.5",
     "valibot": "1.5.0",
     "yaml": "2.9.1"
   },

@@ -12,7 +12,10 @@ const repository = v.object({
 
 const installation = v.object({ id: v.number() });
 
-const pullRequestRefs = v.optional(v.array(v.object({ number: v.number() })), []);
+const pullRequestRefs = v.optional(
+  v.array(v.object({ number: v.number(), head: v.optional(v.object({ sha: v.string() })) })),
+  [],
+);
 
 /** `pull_request` and `pull_request_review` both carry what evaluation needs. */
 export const pullRequestEventSchema = v.object({
