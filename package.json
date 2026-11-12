@@ -35,7 +35,7 @@
     "@octokit/graphql-schema": "15.26.1",
     "@types/node": "26.6.6",
     "@valibot/to-json-schema": "1.8.0",
-    "graphql": "16.15.0",
+    "graphql": "17.1.0",
     "typescript": "7.0.2",
     "vite": "catalog:",
     "vite-plus": "catalog:",
