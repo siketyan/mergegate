@@ -33,23 +33,23 @@
     "@graphql-codegen/typescript": "6.1.2",
     "@graphql-codegen/typescript-operations": "6.2.0",
     "@octokit/graphql-schema": "15.26.1",
-    "@types/node": "26.6.5",
+    "@types/node": "26.6.6",
     "@valibot/to-json-schema": "1.8.0",
-    "graphql": "16.14.2",
+    "graphql": "16.15.0",
     "typescript": "7.0.2",
     "vite": "catalog:",
     "vite-plus": "catalog:",
-    "wrangler": "4.154.0"
+    "wrangler": "4.160.0"
   },
   "devEngines": {
     "packageManager": {
       "name": "pnpm",
-      "version": "12.16.1",
+      "version": "12.18.0",
       "onFail": "download"
     },
     "runtime": {
       "name": "node",
-      "version": "26.13.0",
+      "version": "26.13.1",
       "onFail": "download"
     }
   }
