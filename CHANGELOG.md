@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.0.2](https://github.com/siketyan/mergegate/compare/mergegate-v1.0.1...mergegate-v1.0.2) (2026-10-29)
+
+
+### Bug Fixes
+
+* **adapters:** name the GraphQL field a refusal was raised on ([#25](https://github.com/siketyan/mergegate/issues/25)) ([90d7657](https://github.com/siketyan/mergegate/commit/90d765741d49bc507aeb214d5c8171cb346e2938))
+* **deps:** update all non-major dependencies ([#29](https://github.com/siketyan/mergegate/issues/29)) ([acd772d](https://github.com/siketyan/mergegate/commit/acd772d9006c3a899896812842dcfb68a528391c))
+* fail the check run when GitHub refuses a call ([#24](https://github.com/siketyan/mergegate/issues/24)) ([6704c96](https://github.com/siketyan/mergegate/commit/6704c96f7da3551a64bf0a1d3db50f217d35f95a))
+* **policy:** only gate assisted merges on required checks ([#39](https://github.com/siketyan/mergegate/issues/39)) ([239c716](https://github.com/siketyan/mergegate/commit/239c7164e99b03abe527928adf9df3ce47bb086a))
+
 ## [1.0.1](https://github.com/siketyan/mergegate/compare/mergegate-v1.0.0...mergegate-v1.0.1) (2026-08-27)
 
 
