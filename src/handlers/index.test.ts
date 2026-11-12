@@ -147,6 +147,31 @@ test("a commit heading several pull requests merges none of them", async () => {
   expect(state.checkRuns).toHaveLength(2);
 });
 
+test("a pull request the commit no longer heads does not block the merge button", async () => {
+  const first = pullRequest({ number: 12, headSha: HEAD_SHA });
+  const second = pullRequest({ number: 13, headSha: "beef" });
+  const { api, state } = createFakeGitHub({
+    configSource: ASSISTED,
+    pullRequests: new Map([
+      [first.number, first],
+      [second.number, second],
+    ]),
+  });
+  const { context } = createTestContext(api);
+  const payload = await fixture("check_run.requested_action");
+  // GitHub matches on the head branch as well as the head commit.
+  payload.check_run = {
+    ...(payload.check_run as Record<string, unknown>),
+    pull_requests: [
+      { number: 12, head: { sha: HEAD_SHA } },
+      { number: 13, head: { sha: "beef" } },
+    ],
+  };
+
+  await handleDelivery(context, "check_run", payload);
+  expect(state.merges).toMatchObject([{ pullNumber: 12, input: { sha: HEAD_SHA } }]);
+});
+
 test("a button mergegate does not offer is ignored", async () => {
   const { api, state } = fake({ configSource: ASSISTED });
   const { context } = createTestContext(api);
