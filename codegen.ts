@@ -8,6 +8,9 @@ import type { CodegenConfig } from "@graphql-codegen/cli";
 const config: CodegenConfig = {
   schema: "node_modules/@octokit/graphql-schema/schema.graphql",
   documents: ["src/adapters/github/**/*.ts"],
+  // graphql 17 rejects GitHub's schema, which deprecates fields on types but
+  // not on the interfaces they implement. The schema is GitHub's, not ours to fix.
+  config: { assumeValid: true },
   generates: {
     "src/adapters/github/generated/graphql.ts": {
       plugins: ["typescript-operations"],
