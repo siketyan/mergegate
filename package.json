@@ -33,13 +33,13 @@
     "@graphql-codegen/typescript": "7.0.1",
     "@graphql-codegen/typescript-operations": "7.0.2",
     "@octokit/graphql-schema": "15.26.1",
-    "@types/node": "26.6.6",
+    "@types/node": "26.6.7",
     "@valibot/to-json-schema": "1.8.0",
     "graphql": "17.1.0",
     "typescript": "7.0.2",
     "vite": "catalog:",
     "vite-plus": "catalog:",
-    "wrangler": "4.167.0"
+    "wrangler": "4.168.0"
   },
   "devEngines": {
     "packageManager": {
