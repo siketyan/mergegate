@@ -31,7 +31,7 @@
   "devDependencies": {
     "@graphql-codegen/cli": "8.0.0",
     "@graphql-codegen/typescript": "7.0.1",
-    "@graphql-codegen/typescript-operations": "7.0.2",
+    "@graphql-codegen/typescript-operations": "7.0.3",
     "@octokit/graphql-schema": "15.26.1",
     "@types/node": "26.6.11",
     "@valibot/to-json-schema": "1.8.0",
